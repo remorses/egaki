@@ -15,6 +15,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import pc from 'picocolors'
 import pkg from '../package.json' with { type: 'json' }
+import { injectCredentialsToEnv, PROVIDERS } from './credentials.js'
+import {
+  loginInteractive,
+  loginNonInteractive,
+  showLoginStatus,
+  removeLogin,
+  readKeyFromStdin,
+} from './login.js'
 
 const cli = goke('egaki')
 
@@ -22,22 +30,68 @@ process.title = 'egaki'
 
 const DEFAULT_MODEL = 'imagen-4.0-generate-001'
 
-// Aspect ratios supported by Google's Imagen models
-const IMAGEN_ASPECT_RATIOS = ['1:1', '3:4', '4:3', '9:16', '16:9'] as const
+// ─── login command ───────────────────────────────────────────────────────────
 
-// Aspect ratios supported by Gemini text-model image generation (wider set)
-const GEMINI_ASPECT_RATIOS = [
-  '1:1',
-  '2:3',
-  '3:2',
-  '3:4',
-  '4:3',
-  '4:5',
-  '5:4',
-  '9:16',
-  '16:9',
-  '21:9',
-] as const
+cli
+  .command(
+    'login',
+    [
+      'Configure API keys for image generation providers.',
+      'Interactive mode: shows a provider picker and secure key input.',
+      'Non-interactive mode: pass --provider and --key flags, or pipe key via stdin.',
+      'Keys are saved to ~/.config/egaki/credentials.json (mode 0600).',
+    ].join(' '),
+  )
+  .option(
+    '-p, --provider [name]',
+    z
+      .string()
+      .describe(
+        `Provider name for non-interactive login (${Object.keys(PROVIDERS).join(', ')})`,
+      ),
+  )
+  .option(
+    '-k, --key [key]',
+    z.string().describe('API key value for non-interactive login'),
+  )
+  .option('--show', 'Show which providers are configured and their status')
+  .option(
+    '--remove [provider]',
+    z.string().describe('Remove the stored key for a provider'),
+  )
+  .example('# Interactive login (pick provider, paste key)')
+  .example('egaki login')
+  .example('# Non-interactive login with flags')
+  .example('egaki login --provider google --key AIza...')
+  .example('# Pipe key from stdin (useful in CI/scripts)')
+  .example('echo "AIza..." | egaki login --provider google')
+  .example('# Show configured providers')
+  .example('egaki login --show')
+  .example('# Remove a stored key')
+  .example('egaki login --remove google')
+  .action(async (options) => {
+    if (options.show) {
+      showLoginStatus()
+      return
+    }
+
+    if (options.remove) {
+      removeLogin(options.remove)
+      return
+    }
+
+    // Non-interactive: --provider + --key or stdin
+    if (options.provider) {
+      const key = options.key || (await readKeyFromStdin())
+      loginNonInteractive({ provider: options.provider, key })
+      return
+    }
+
+    // Interactive mode
+    await loginInteractive()
+  })
+
+// ─── image command ───────────────────────────────────────────────────────────
 
 cli
   .command(
@@ -136,6 +190,9 @@ cli
   .example('# Pipe to another tool')
   .example('egaki image "logo design" --stdout | convert - -resize 512x512 logo.png')
   .action(async (prompt, options) => {
+    // Inject stored API keys as env vars before calling the AI SDK
+    injectCredentialsToEnv()
+
     const model = options.model
     const outputPath = options.output
     const useTextModel = isTextImageModel(model)
