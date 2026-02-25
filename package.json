@@ -1,0 +1,25 @@
+{
+  "name": "egaki",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "AI image and video generation CLI",
+  "bin": "bin.js",
+  "files": [
+    "dist",
+    "bin.js"
+  ],
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "prepublishOnly": "pnpm build"
+  },
+  "keywords": [
+    "ai",
+    "image",
+    "video",
+    "generation",
+    "cli",
+    "gemini"
+  ],
+  "license": "MIT"
+}
