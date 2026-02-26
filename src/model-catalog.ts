@@ -261,7 +261,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux 2 Pro',
     released: '2025-11-25',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.055 },
+    cost: { type: 'per-image', perImage: 0.015 },
     features: {
       editing: false,
       inpainting: false,
@@ -275,7 +275,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux 2 Dev',
     released: '2025-11-25',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.012 },
     features: {
       editing: false,
       inpainting: false,
@@ -303,7 +303,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux Pro',
     released: '2024-08-01',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.05 },
+    cost: { type: 'per-image', perImage: 0.055 },
     features: {
       editing: false,
       inpainting: false,
@@ -345,7 +345,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux Fill Dev',
     released: '2024-10-15',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.04 },
     features: {
       editing: true,
       inpainting: true,
@@ -373,7 +373,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Ideogram v2 Turbo',
     released: '2024-08-19',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.04 },
+    cost: { type: 'per-image', perImage: 0.05 },
     features: {
       editing: false,
       inpainting: false,
@@ -401,7 +401,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Recraft v3 SVG',
     released: '2024-10-29',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.04 },
+    cost: { type: 'per-image', perImage: 0.08 },
     features: {
       editing: false,
       inpainting: false,
@@ -415,7 +415,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'SD 3.5 Large',
     released: '2024-10-22',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.035 },
+    cost: { type: 'per-image', perImage: 0.065 },
     features: {
       editing: false,
       inpainting: false,
@@ -429,7 +429,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'SD 3.5 Large Turbo',
     released: '2024-10-22',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.015 },
+    cost: { type: 'per-image', perImage: 0.04 },
     features: {
       editing: false,
       inpainting: false,
@@ -443,7 +443,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'SD 3.5 Medium',
     released: '2024-10-29',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.035 },
     features: {
       editing: false,
       inpainting: false,
@@ -457,7 +457,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Luma Photon',
     released: '2024-12-10',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.04 },
+    cost: { type: 'per-image', perImage: 0.03 },
     features: {
       editing: false,
       inpainting: false,
@@ -471,7 +471,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Luma Photon Flash',
     released: '2024-12-10',
     ...replicateImage,
-    cost: { type: 'per-image', perImage: 0.02 },
+    cost: { type: 'per-image', perImage: 0.01 },
     features: {
       editing: false,
       inpainting: false,
@@ -529,7 +529,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux General',
     released: '2025-01',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.075 },
     features: {
       editing: true,
       inpainting: false,
@@ -543,7 +543,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux General Inpainting',
     released: '2025-01',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.075 },
     features: {
       editing: true,
       inpainting: true,
@@ -557,7 +557,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux General Image-to-Image',
     released: '2025-01',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.075 },
     features: {
       editing: true,
       inpainting: false,
@@ -627,7 +627,7 @@ export const CATALOG: ModelEntry[] = [
     name: 'Flux LoRA',
     released: '2024-09',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.025 },
+    cost: { type: 'per-image', perImage: 0.035 },
     features: {
       editing: false,
       inpainting: false,
@@ -669,10 +669,10 @@ export const CATALOG: ModelEntry[] = [
     name: 'Ideogram Character',
     released: '2025-03',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.08 },
+    cost: { type: 'per-image', perImage: 0.10 },
     features: {
-      editing: false,
-      inpainting: false,
+      editing: true,
+      inpainting: true,
       aspectRatios: fluxAspectRatios,
       seed: true,
       multipleImages: false,
@@ -697,12 +697,12 @@ export const CATALOG: ModelEntry[] = [
     name: 'Luma Photon (Fal)',
     released: '2024-12-10',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.04 },
+    cost: { type: 'per-image', perImage: 0.019 },
     features: {
       editing: false,
       inpainting: false,
       aspectRatios: fluxAspectRatios,
-      seed: true,
+      seed: false,
       multipleImages: false,
     },
   },
@@ -711,12 +711,12 @@ export const CATALOG: ModelEntry[] = [
     name: 'Luma Photon Flash (Fal)',
     released: '2024-12-10',
     ...falImage,
-    cost: { type: 'per-image', perImage: 0.02 },
+    cost: { type: 'per-image', perImage: 0.005 },
     features: {
       editing: false,
       inpainting: false,
       aspectRatios: fluxAspectRatios,
-      seed: true,
+      seed: false,
       multipleImages: false,
     },
   },
