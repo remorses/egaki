@@ -24,3 +24,17 @@ cli.command("example", "Do something").action(async (options) => {
   // happy path continues at root level
 });
 ```
+
+## Vercel AI SDK image generation docs
+
+Before making changes to image generation logic, read the relevant AI SDK docs.
+Append `.md` to any URL below to get clean markdown as plain text.
+
+- https://ai-sdk.dev/docs/ai-sdk-core/image-generation
+- https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-image
+- https://ai-sdk.dev/docs/reference/ai-sdk-core/wrap-image-model
+- https://ai-sdk.dev/docs/reference/ai-sdk-errors/ai-no-image-generated-error
+- https://ai-sdk.dev/docs/troubleshooting/high-memory-usage-with-images
+- https://ai-sdk.dev/cookbook/guides/google-gemini-image-generation
+
+For example: `curl https://ai-sdk.dev/docs/ai-sdk-core/image-generation.md`
