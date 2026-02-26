@@ -154,9 +154,12 @@ export async function subscribeInteractive(): Promise<void> {
   }
 }
 
-export function subscribeNonInteractive(email: string, plan?: string): void {
-  const planId = plan || 'pro'
-  const checkoutUrl = `${GATEWAY_BASE}/buy?plan=${planId}&email=${encodeURIComponent(email)}`
+export function subscribeNonInteractive(email?: string, plan?: string): void {
+  const planId = plan || 'plus'
+  let checkoutUrl = `${GATEWAY_BASE}/buy?plan=${planId}`
+  if (email) {
+    checkoutUrl += `&email=${encodeURIComponent(email)}`
+  }
 
   console.log(pc.bold('Egaki Subscription'))
   console.log('')
