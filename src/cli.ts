@@ -152,7 +152,7 @@ cli
     z
       .array(z.string())
       .describe(
-        'Reference image file path for editing or variations (repeatable). Pass one or more images along with a text prompt to edit them',
+        'Reference image for editing or variations (repeatable). Accepts local file paths or URLs (http/https). Pass one or more images along with a text prompt to edit them',
       ),
   )
   .option(
@@ -160,7 +160,7 @@ cli
     z
       .string()
       .describe(
-        'Mask image file path for inpainting. White areas in the mask are replaced with generated content. Used together with --input',
+        'Mask image for inpainting. Accepts a local file path or URL (http/https). White areas in the mask are replaced with generated content. Used together with --input',
       ),
   )
   .option(
@@ -181,6 +181,8 @@ cli
   .example('egaki image "cyberpunk city at night" -m imagen-4.0-ultra-generate-001 --aspect-ratio 16:9')
   .example('# Edit an existing image')
   .example('egaki image "add a wizard hat to the cat" --input cat.jpg -o cat-wizard.png')
+  .example('# Edit an image from a URL')
+  .example('egaki image "make it pop art" --input https://example.com/photo.jpg')
   .example('# Inpainting with a mask')
   .example('egaki image "fill with flowers" --input photo.jpg --mask mask.png')
   .example('# Generate with Gemini multimodal at 4K')
@@ -208,7 +210,7 @@ cli
     }
 
     const inputImages = await readInputImages(options.input)
-    const maskImage = options.mask ? await readFileAsBuffer(options.mask) : undefined
+    const maskImage = options.mask ? await readInputSource(options.mask) : undefined
 
     if (useTextModel) {
       await generateWithTextModel({
@@ -251,8 +253,21 @@ function isTextImageModel(model: string): boolean {
   return /^gemini-.+-image/.test(model)
 }
 
-async function readFileAsBuffer(filePath: string): Promise<Uint8Array> {
-  const resolved = path.resolve(filePath)
+function isUrl(input: string): boolean {
+  return /^https?:\/\//i.test(input)
+}
+
+async function readInputSource(input: string): Promise<Uint8Array> {
+  if (isUrl(input)) {
+    console.error(pc.dim(`Fetching ${input}...`))
+    const res = await fetch(input)
+    if (!res.ok) {
+      console.error(pc.red(`Failed to fetch ${input}: ${res.status} ${res.statusText}`))
+      process.exit(1)
+    }
+    return new Uint8Array(await res.arrayBuffer())
+  }
+  const resolved = path.resolve(input)
   if (!fs.existsSync(resolved)) {
     console.error(pc.red(`File not found: ${resolved}`))
     process.exit(1)
@@ -266,7 +281,7 @@ async function readInputImages(
   if (!inputs || inputs.length === 0) {
     return []
   }
-  return Promise.all(inputs.map((f) => readFileAsBuffer(f)))
+  return Promise.all(inputs.map((f) => readInputSource(f)))
 }
 
 // Generate using the dedicated generateImage API (Imagen models)

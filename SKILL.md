@@ -25,8 +25,9 @@ egaki login
 # generate an image
 egaki image "a sunset over mars"
 
-# edit an existing image
+# edit an existing image (local file or URL)
 egaki image "add a wizard hat" --input photo.jpg
+egaki image "make it pop art" --input https://example.com/photo.jpg
 
 # pipe to another tool
 egaki image "logo" --stdout | convert - -resize 512x512 logo.png
