@@ -31,6 +31,12 @@ import {
   removeLogin,
   readKeyFromStdin,
 } from './login.js'
+import {
+  subscribeInteractive,
+  subscribeNonInteractive,
+  unsubscribe,
+  showUsage,
+} from './subscription.js'
 
 const cli = goke('egaki')
 
@@ -111,6 +117,69 @@ cli
 
     // Interactive mode
     await loginInteractive()
+  })
+
+// ─── subscribe command ───────────────────────────────────────────────────────
+
+cli
+  .command(
+    'subscribe',
+    dedent`
+      Subscribe to Egaki for access to all image models with a single API key.
+      Three plans: Starter ($9/mo, 100 credits), Pro ($29/mo, 500 credits),
+      Unlimited ($99/mo, 2000 credits). One credit ≈ one standard image.
+      Interactive mode: pick a plan, enter email, get checkout URL.
+      Non-interactive: pass --email to get the checkout URL directly.
+    `,
+  )
+  .option(
+    '-e, --email [email]',
+    z.string().describe('Email for the subscription (skips interactive prompt)'),
+  )
+  .option(
+    '--plan [plan]',
+    z.string().describe('Plan ID: starter, pro, or unlimited (default: pro)'),
+  )
+  .example('# Interactive subscribe')
+  .example('egaki subscribe')
+  .example('# Non-interactive (for agents)')
+  .example('egaki subscribe --email user@example.com --plan pro')
+  .action(async (options) => {
+    if (options.email) {
+      subscribeNonInteractive(options.email, options.plan)
+      return
+    }
+    await subscribeInteractive()
+  })
+
+// ─── unsubscribe command ─────────────────────────────────────────────────────
+
+cli
+  .command(
+    'unsubscribe',
+    dedent`
+      Cancel your Egaki subscription. Uses the stored API key to identify
+      the subscription. You can resubscribe anytime with 'egaki subscribe'.
+    `,
+  )
+  .example('egaki unsubscribe')
+  .action(async () => {
+    await unsubscribe()
+  })
+
+// ─── usage command ───────────────────────────────────────────────────────────
+
+cli
+  .command(
+    'usage',
+    dedent`
+      Show your current Egaki credit usage for this billing period.
+      Displays plan, credits used, credits remaining, and period info.
+    `,
+  )
+  .example('egaki usage')
+  .action(async () => {
+    await showUsage()
   })
 
 // ─── image command ───────────────────────────────────────────────────────────
