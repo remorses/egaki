@@ -44,6 +44,8 @@ export type ModelEntry = {
   name: string
   provider: string
   strategy: 'image' | 'text'
+  /** Release date in YYYY-MM-DD or YYYY-MM format */
+  released: string
   cost: ModelCost
   features: ModelFeatures
 }
@@ -99,18 +101,21 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'imagen-4.0-generate-001',
     name: 'Imagen 4',
+    released: '2025-08-15',
     ...googleImagen,
     cost: { type: 'per-image', perImage: 0.04 },
   },
   {
     id: 'imagen-4.0-ultra-generate-001',
     name: 'Imagen 4 Ultra',
+    released: '2025-08-15',
     ...googleImagen,
     cost: { type: 'per-image', perImage: 0.06 },
   },
   {
     id: 'imagen-4.0-fast-generate-001',
     name: 'Imagen 4 Fast',
+    released: '2025-08-15',
     ...googleImagen,
     cost: { type: 'per-image', perImage: 0.02 },
   },
@@ -119,24 +124,28 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'gemini-2.0-flash-exp-image-generation',
     name: 'Gemini 2.0 Flash (Image)',
+    released: '2025-03',
     ...googleText,
     cost: { type: 'per-token', inputPerM: 0.1, outputPerM: 0.4 },
   },
   {
     id: 'gemini-2.5-flash-image',
     name: 'Gemini 2.5 Flash Image',
+    released: '2025-08-26',
     ...googleText,
     cost: { type: 'per-token', inputPerM: 0.3, outputPerM: 30 },
   },
   {
     id: 'gemini-3-pro-image-preview',
     name: 'Gemini 3 Pro Image',
+    released: '2025-11-20',
     ...googleText,
     cost: { type: 'per-token', inputPerM: 1.25, outputPerM: 10 },
   },
   {
     id: 'nano-banana-pro-preview',
     name: 'Nano Banana Pro',
+    released: '2025-11-20',
     ...googleText,
     cost: { type: 'per-token', inputPerM: 0.3, outputPerM: 30 },
   },
@@ -145,6 +154,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'dall-e-2',
     name: 'DALL-E 2',
+    released: '2022-11-03',
     ...openaiImage,
     cost: { type: 'per-image', perImage: 0.02 },
     features: {
@@ -159,6 +169,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'dall-e-3',
     name: 'DALL-E 3',
+    released: '2023-10-03',
     ...openaiImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -173,6 +184,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'gpt-image-1',
     name: 'GPT Image 1',
+    released: '2025-04-23',
     ...openaiImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -187,6 +199,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'gpt-image-1-mini',
     name: 'GPT Image 1 Mini',
+    released: '2025-10-06',
     ...openaiImage,
     cost: { type: 'per-image', perImage: 0.009 },
     features: {
@@ -201,6 +214,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'gpt-image-1.5',
     name: 'GPT Image 1.5',
+    released: '2025-12-16',
     ...openaiImage,
     cost: { type: 'per-image', perImage: 0.034 },
     features: {
@@ -217,6 +231,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-1.1-pro',
     name: 'Flux 1.1 Pro',
+    released: '2024-10-01',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -230,6 +245,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-1.1-pro-ultra',
     name: 'Flux 1.1 Pro Ultra',
+    released: '2024-11-06',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.06 },
     features: {
@@ -243,6 +259,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-2-pro',
     name: 'Flux 2 Pro',
+    released: '2025-11-25',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.055 },
     features: {
@@ -256,6 +273,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-2-dev',
     name: 'Flux 2 Dev',
+    released: '2025-11-25',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -269,6 +287,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-dev',
     name: 'Flux Dev',
+    released: '2024-08-01',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -282,6 +301,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-pro',
     name: 'Flux Pro',
+    released: '2024-08-01',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.05 },
     features: {
@@ -295,6 +315,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-schnell',
     name: 'Flux Schnell',
+    released: '2024-08-01',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.003 },
     features: {
@@ -308,6 +329,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-fill-pro',
     name: 'Flux Fill Pro',
+    released: '2024-10-15',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.05 },
     features: {
@@ -321,6 +343,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'black-forest-labs/flux-fill-dev',
     name: 'Flux Fill Dev',
+    released: '2024-10-15',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -334,6 +357,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'ideogram-ai/ideogram-v2',
     name: 'Ideogram v2',
+    released: '2024-08-19',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.08 },
     features: {
@@ -347,6 +371,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'ideogram-ai/ideogram-v2-turbo',
     name: 'Ideogram v2 Turbo',
+    released: '2024-08-19',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -360,6 +385,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'recraft-ai/recraft-v3',
     name: 'Recraft v3',
+    released: '2024-10-29',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -373,6 +399,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'recraft-ai/recraft-v3-svg',
     name: 'Recraft v3 SVG',
+    released: '2024-10-29',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -386,6 +413,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'stability-ai/stable-diffusion-3.5-large',
     name: 'SD 3.5 Large',
+    released: '2024-10-22',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.035 },
     features: {
@@ -399,6 +427,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'stability-ai/stable-diffusion-3.5-large-turbo',
     name: 'SD 3.5 Large Turbo',
+    released: '2024-10-22',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.015 },
     features: {
@@ -412,6 +441,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'stability-ai/stable-diffusion-3.5-medium',
     name: 'SD 3.5 Medium',
+    released: '2024-10-29',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -425,6 +455,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'luma/photon',
     name: 'Luma Photon',
+    released: '2024-12-10',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -438,6 +469,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'luma/photon-flash',
     name: 'Luma Photon Flash',
+    released: '2024-12-10',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.02 },
     features: {
@@ -451,6 +483,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'nvidia/sana',
     name: 'NVIDIA Sana',
+    released: '2024-11-27',
     ...replicateImage,
     cost: { type: 'per-image', perImage: 0.01 },
     features: {
@@ -466,6 +499,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux/schnell',
     name: 'Flux Schnell',
+    released: '2024-08-01',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.003 },
     features: {
@@ -479,6 +513,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux/dev',
     name: 'Flux Dev',
+    released: '2024-08-01',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -492,6 +527,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-general',
     name: 'Flux General',
+    released: '2025-01',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -505,6 +541,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-general/inpainting',
     name: 'Flux General Inpainting',
+    released: '2025-01',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -518,6 +555,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-general/image-to-image',
     name: 'Flux General Image-to-Image',
+    released: '2025-01',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -531,6 +569,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-pro/v1.1',
     name: 'Flux Pro 1.1',
+    released: '2024-10-01',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -544,6 +583,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-pro/v1.1-ultra',
     name: 'Flux Pro 1.1 Ultra',
+    released: '2024-11-06',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.06 },
     features: {
@@ -557,6 +597,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-pro/kontext',
     name: 'Flux Kontext',
+    released: '2025-06-12',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -570,6 +611,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-pro/kontext/max',
     name: 'Flux Kontext Max',
+    released: '2025-06-12',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.08 },
     features: {
@@ -583,6 +625,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/flux-lora',
     name: 'Flux LoRA',
+    released: '2024-09',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.025 },
     features: {
@@ -596,6 +639,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/recraft/v3/text-to-image',
     name: 'Recraft v3',
+    released: '2024-10-29',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -609,6 +653,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/recraft/v3/image-to-image',
     name: 'Recraft v3 Image-to-Image',
+    released: '2024-10-29',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -622,6 +667,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/ideogram/character',
     name: 'Ideogram Character',
+    released: '2025-03',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.08 },
     features: {
@@ -635,6 +681,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/imagen4/preview',
     name: 'Imagen 4 (Fal)',
+    released: '2025-08-15',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -648,6 +695,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/luma-photon',
     name: 'Luma Photon (Fal)',
+    released: '2024-12-10',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.04 },
     features: {
@@ -661,6 +709,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/luma-photon/flash',
     name: 'Luma Photon Flash (Fal)',
+    released: '2024-12-10',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.02 },
     features: {
@@ -674,6 +723,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/omnigen-v2',
     name: 'OmniGen v2',
+    released: '2025-06',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.03 },
     features: {
@@ -687,6 +737,7 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'fal-ai/qwen-image',
     name: 'Qwen Image',
+    released: '2025-06',
     ...falImage,
     cost: { type: 'per-image', perImage: 0.03 },
     features: {

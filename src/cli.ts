@@ -291,6 +291,7 @@ cli
       name: m.name,
       provider: m.provider,
       strategy: m.strategy,
+      released: m.released,
       cost:
         m.cost.type === 'per-image'
           ? `$${m.cost.perImage}/image`
