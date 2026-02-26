@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "egaki-gateway",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-05-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+
+  // KV Namespace for API keys, usage, subscriptions
+  "kv_namespaces": [
+    {
+      "binding": "EGAKI_KV",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ],
+
+  // Custom domain
+  "routes": [
+    { "pattern": "egaki.org", "custom_domain": true },
+    { "pattern": "www.egaki.org", "custom_domain": true }
+  ]
+}
