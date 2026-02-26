@@ -35,6 +35,22 @@ const cli = goke('egaki')
 
 process.title = 'egaki'
 
+// Print clean error output for unhandled rejections (e.g. AI SDK APICallError).
+// The AI SDK errors include request bodies, response headers, and other noisy
+// properties that get dumped by Node's default handler. We strip those and just
+// print the message + stack trace.
+process.on('uncaughtException', (err) => {
+  console.error(pc.red(err.message))
+  if (err.stack) {
+    const lines = err.stack.split('\n')
+    const stackOnly = lines.filter((l) => l.trimStart().startsWith('at '))
+    if (stackOnly.length > 0) {
+      console.error(pc.dim(stackOnly.join('\n')))
+    }
+  }
+  process.exit(1)
+})
+
 // ─── login command ───────────────────────────────────────────────────────────
 
 cli
