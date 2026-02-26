@@ -12,6 +12,11 @@ export const PROVIDERS: Record<
   string,
   { envVar: string; label: string; hint: string }
 > = {
+  egaki: {
+    envVar: 'EGAKI_API_KEY',
+    label: 'Egaki (all models, one subscription)',
+    hint: 'Subscribe at https://egaki.org/buy or run: egaki subscribe',
+  },
   google: {
     envVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
     label: 'Google AI (Gemini, Imagen)',
@@ -33,6 +38,8 @@ export const PROVIDERS: Record<
     hint: 'Get your key at https://fal.ai/dashboard/keys',
   },
 }
+
+export const EGAKI_GATEWAY_URL = 'https://egaki.org/v1/ai'
 
 function getConfigDir(): string {
   // XDG_CONFIG_HOME or ~/.config/egaki
