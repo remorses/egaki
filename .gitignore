@@ -2,4 +2,8 @@ node_modules
 dist
 tmp
 .env
+gateway/.env
 *.tgz
+
+# opensrc - source code for packages
+opensrc/
