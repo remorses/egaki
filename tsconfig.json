@@ -1,29 +1,32 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext"],
+    "lib": [
+      "ESNext"
+    ],
     "target": "ESNext",
     "module": "nodenext",
     "moduleDetection": "force",
     "allowJs": true,
-
     "outDir": "dist",
     "rootDir": "src",
-
     "useUnknownInCatchVariables": false,
     "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,
     "noEmit": false,
-
     "strict": true,
     "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
   },
-  "include": ["src"],
-  "exclude": ["dist"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "dist",
+    "opensrc"
+  ]
 }
