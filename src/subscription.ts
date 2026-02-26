@@ -155,17 +155,26 @@ export async function subscribeInteractive(): Promise<void> {
 }
 
 export function subscribeNonInteractive(email?: string, plan?: string): void {
-  const planId = plan || 'plus'
-  let checkoutUrl = `${GATEWAY_BASE}/buy?plan=${planId}`
-  if (email) {
-    checkoutUrl += `&email=${encodeURIComponent(email)}`
+  const emailParam = email ? `&email=${encodeURIComponent(email)}` : ''
+
+  if (plan) {
+    // Specific plan requested
+    const checkoutUrl = `${GATEWAY_BASE}/buy?plan=${plan}${emailParam}`
+    console.log(pc.bold('Egaki Subscription'))
+    console.log('')
+    console.log('Open this URL to complete payment:')
+    console.log('')
+    console.log(pc.cyan(checkoutUrl))
+  } else {
+    // No plan specified — show all options
+    console.log(pc.bold('Egaki Subscription'))
+    console.log('')
+    console.log('Choose a plan:')
+    console.log('')
+    console.log(`  ${pc.bold('Plus')}  $29/mo  ${pc.cyan(`${GATEWAY_BASE}/buy?plan=plus${emailParam}`)}`)
+    console.log(`  ${pc.bold('Pro')}   $99/mo  ${pc.cyan(`${GATEWAY_BASE}/buy?plan=pro${emailParam}`)}`)
   }
 
-  console.log(pc.bold('Egaki Subscription'))
-  console.log('')
-  console.log('Open this URL to complete payment:')
-  console.log('')
-  console.log(pc.cyan(checkoutUrl))
   console.log('')
   console.log('After payment, you\'ll receive your API key via email.')
   console.log(`Then run: ${pc.cyan('egaki login --provider egaki --key egaki_...')}`)

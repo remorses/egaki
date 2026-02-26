@@ -145,7 +145,8 @@ cli
   .example('# Non-interactive (for agents)')
   .example('egaki subscribe --email user@example.com --plan pro')
   .action(async (options) => {
-    if (options.email || options.plan) {
+    const isTTY = process.stdout.isTTY && process.stdin.isTTY
+    if (!isTTY || options.email || options.plan) {
       subscribeNonInteractive(options.email, options.plan)
       return
     }
