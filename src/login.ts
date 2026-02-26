@@ -34,9 +34,13 @@ export async function loginInteractive(): Promise<void> {
       }
       return pc.dim('(not configured)')
     })()
+    // Highlight the egaki option as recommended
+    const label = key === 'egaki'
+      ? `${pc.bold(info.label)} ${pc.cyan('← recommended')} ${statusLabel}`
+      : `${info.label} ${statusLabel}`
     return {
       value: key,
-      label: `${info.label} ${statusLabel}`,
+      label,
       hint: info.hint,
     }
   })
