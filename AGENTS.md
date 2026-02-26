@@ -38,3 +38,9 @@ Append `.md` to any URL below to get clean markdown as plain text.
 - https://ai-sdk.dev/cookbook/guides/google-gemini-image-generation
 
 For example: `curl https://ai-sdk.dev/docs/ai-sdk-core/image-generation.md`
+
+To find more relevant docs, fetch the sitemap and grep for keywords:
+
+```bash
+curl -s https://ai-sdk.dev/sitemap.xml | grep -oP '(?<=<loc>)[^<]+' | grep image
+```
