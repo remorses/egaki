@@ -17,7 +17,8 @@ import {
 } from '@clack/prompts'
 import { EGAKI_GATEWAY_URL, saveProviderKey, getProviderKey } from './credentials.js'
 
-const GATEWAY_BASE = EGAKI_GATEWAY_URL.replace(/\/v1$/, '')
+// Strip /v1/ai suffix to get the base URL for non-proxy endpoints (/buy, /api/*)
+const GATEWAY_BASE = EGAKI_GATEWAY_URL.replace(/\/v1\/ai$/, '')
 
 type PlanInfo = {
   id: string
