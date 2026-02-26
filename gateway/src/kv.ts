@@ -1,17 +1,31 @@
 // KV wrapper for the Egaki gateway.
 // Stores API keys, subscription records, usage tracking, and checkout mappings.
 // Follows the same pattern as critique's CritiqueKv class.
+//
+// KV key schema:
+//   apikey:{key}          → ApiKeyRecord    (subscription state + usage)
+//   checkout:{sessionId}  → CheckoutRecord  (Stripe checkout → API key mapping)
+//   subscription:{subId}  → SubRecord       (Stripe subscription → API key mapping)
 
 import type { KVNamespace } from '@cloudflare/workers-types'
 import type { PlanId } from './plans.js'
 
-// ── Types ─────────────────────────────────────────────────────────────────
+// ── KV value types ────────────────────────────────────────────────────────
+// Every value stored in KV has an explicit type here.
 
+/** Primary record for an egaki API key. Stored at `apikey:{key}`. */
 export type ApiKeyRecord = {
   status: 'active' | 'inactive' | 'canceled'
   plan: PlanId
+  /** Stripe subscription ID (sub_xxx) */
   subscriptionId?: string
+  /** Stripe customer ID (cus_xxx) */
   customerId?: string
+  /** Stripe Price ID used for this subscription (price_xxx) */
+  stripePriceId?: string
+  /** Stripe account ID that owns this subscription (acct_xxx).
+   *  Tracked so we can migrate to a different Stripe account later. */
+  stripeAccountId?: string
   email?: string
   /** Dollars spent in the current billing period (marked-up costs) */
   dollarsUsed: number
@@ -21,6 +35,33 @@ export type ApiKeyRecord = {
   periodStart: number
   createdAt: number
   updatedAt?: number
+}
+
+/** Maps a Stripe checkout session to an API key. Stored at `checkout:{sessionId}`. */
+export type CheckoutRecord = {
+  apiKey: string
+  /** Stripe account ID that processed this checkout */
+  stripeAccountId: string
+  createdAt: number
+}
+
+/** Maps a Stripe subscription to an API key. Stored at `subscription:{subId}`. */
+export type SubRecord = {
+  apiKey: string
+  /** Stripe account ID that owns this subscription */
+  stripeAccountId: string
+  createdAt: number
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function parseJson<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
 }
 
 // ── KV class ──────────────────────────────────────────────────────────────
@@ -35,8 +76,7 @@ export class EgakiKv {
   // ── API key records ───────────────────────────────────────────────────
 
   async getApiKey(key: string): Promise<ApiKeyRecord | null> {
-    const raw = await this.kv.get(`apikey:${key}`)
-    return raw ? (JSON.parse(raw) as ApiKeyRecord) : null
+    return parseJson<ApiKeyRecord>(await this.kv.get(`apikey:${key}`))
   }
 
   async setApiKey(key: string, record: ApiKeyRecord): Promise<void> {
@@ -70,20 +110,22 @@ export class EgakiKv {
   // ── Checkout ↔ API key mapping ────────────────────────────────────────
 
   async getCheckoutApiKey(sessionId: string): Promise<string | null> {
-    return this.kv.get(`checkout:${sessionId}`)
+    const record = parseJson<CheckoutRecord>(await this.kv.get(`checkout:${sessionId}`))
+    return record?.apiKey ?? null
   }
 
-  async setCheckoutApiKey(sessionId: string, apiKey: string): Promise<void> {
-    await this.kv.put(`checkout:${sessionId}`, apiKey)
+  async setCheckoutRecord(sessionId: string, record: CheckoutRecord): Promise<void> {
+    await this.kv.put(`checkout:${sessionId}`, JSON.stringify(record))
   }
 
   // ── Subscription ↔ API key mapping ────────────────────────────────────
 
   async getSubscriptionApiKey(subscriptionId: string): Promise<string | null> {
-    return this.kv.get(`subscription:${subscriptionId}`)
+    const record = parseJson<SubRecord>(await this.kv.get(`subscription:${subscriptionId}`))
+    return record?.apiKey ?? null
   }
 
-  async setSubscriptionApiKey(subscriptionId: string, apiKey: string): Promise<void> {
-    await this.kv.put(`subscription:${subscriptionId}`, apiKey)
+  async setSubRecord(subscriptionId: string, record: SubRecord): Promise<void> {
+    await this.kv.put(`subscription:${subscriptionId}`, JSON.stringify(record))
   }
 }

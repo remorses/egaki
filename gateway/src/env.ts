@@ -18,6 +18,10 @@ export type Env = {
   STRIPE_SECRET_KEY: string
   /** Stripe webhook signing secret for verifying webhook payloads */
   STRIPE_WEBHOOK_SECRET: string
+  /** Stripe Price ID for the Plus plan ($29/mo) */
+  STRIPE_PRICE_ID_PLUS: string
+  /** Stripe Price ID for the Pro plan ($99/mo) */
+  STRIPE_PRICE_ID_PRO: string
 
   // ── Email ──────────────────────────────────────────────────────────────
   /** Resend API key for sending license emails */

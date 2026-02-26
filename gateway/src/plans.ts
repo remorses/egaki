@@ -3,10 +3,14 @@
 // Each generation costs: actual_provider_cost × MARKUP_MULTIPLIER.
 // Our profit = markup portion of each generation.
 //
-// Cost data is imported directly from the model catalog (src/model-catalog.ts)
-// so there's no duplication. Wrangler's bundler resolves the cross-directory import.
+// Model costs are derived from the catalog (src/model-catalog.ts).
+// Wrangler's bundler resolves the cross-directory import at build time.
+//
+// Stripe Price IDs come from env secrets (not hardcoded) so we can
+// rotate them or switch Stripe accounts without redeploying code.
 
 import { CATALOG, type ModelEntry } from '../../src/model-catalog.js'
+import type { Env } from './env.js'
 
 export type PlanId = 'plus' | 'pro'
 
@@ -15,8 +19,6 @@ export type Plan = {
   name: string
   /** Monthly price in USD — this is also the spending cap */
   price: number
-  /** Stripe Price ID — set after creating products in Stripe */
-  stripePriceId: string
 }
 
 // ── Markup ────────────────────────────────────────────────────────────────
@@ -34,25 +36,51 @@ export const PLANS: Record<PlanId, Plan> = {
     id: 'plus',
     name: 'Plus',
     price: 29,
-    stripePriceId: 'REPLACE_WITH_STRIPE_PRICE_ID_PLUS',
   },
   pro: {
     id: 'pro',
     name: 'Pro',
     price: 99,
-    stripePriceId: 'REPLACE_WITH_STRIPE_PRICE_ID_PRO',
   },
 }
 
 export const PLAN_IDS = Object.keys(PLANS) as PlanId[]
 export const DEFAULT_PLAN: PlanId = 'plus'
 
+/**
+ * Resolve a plan's Stripe Price ID from env secrets.
+ * Price IDs are stored as STRIPE_PRICE_ID_PLUS, STRIPE_PRICE_ID_PRO.
+ */
+export function getStripePriceId(planId: PlanId, env: Env): string {
+  const map: Record<PlanId, string | undefined> = {
+    plus: env.STRIPE_PRICE_ID_PLUS,
+    pro: env.STRIPE_PRICE_ID_PRO,
+  }
+  const priceId = map[planId]
+  if (!priceId) {
+    throw new Error(`Missing Stripe Price ID for plan: ${planId}`)
+  }
+  return priceId
+}
+
+/**
+ * Get a plan by its Stripe Price ID (checks against env secrets).
+ */
+export function getPlanByPriceId(priceId: string, env: Env): Plan | undefined {
+  for (const plan of Object.values(PLANS)) {
+    if (getStripePriceId(plan.id, env) === priceId) {
+      return plan
+    }
+  }
+  return undefined
+}
+
 // ── Per-model provider costs (derived from catalog) ──────────────────────
 // Built at module init from the single source of truth in src/model-catalog.ts.
 // For per-image models: use the perImage cost directly.
-// For per-token models (Gemini text+image): estimate ~$0.05/image based on
-// typical token usage (~200 input + ~1500 output tokens). This is a rough
-// estimate — actual costs vary by prompt length and output complexity.
+// For per-token models (Gemini text+image): estimate based on typical token
+// usage (~200 input + ~1500 output tokens). Rough estimate — actual costs
+// vary by prompt length and output complexity.
 
 const ESTIMATED_TOKENS_PER_IMAGE = { input: 200, output: 1500 }
 
@@ -60,7 +88,6 @@ function estimatePerImageCost(entry: ModelEntry): number {
   if (entry.cost.type === 'per-image') {
     return entry.cost.perImage
   }
-  // per-token: estimate based on typical image generation token counts
   const { input, output } = ESTIMATED_TOKENS_PER_IMAGE
   return (input * entry.cost.inputPerM + output * entry.cost.outputPerM) / 1_000_000
 }
@@ -69,7 +96,6 @@ const MODEL_COSTS = new Map<string, number>(
   CATALOG.map((m) => [m.id, estimatePerImageCost(m)]),
 )
 
-// Default cost for unknown models (conservative estimate)
 const DEFAULT_MODEL_COST = 0.04
 
 /**
@@ -86,11 +112,4 @@ export function getModelUserCost(modelId: string): number {
  */
 export function getModelProviderCost(modelId: string): number {
   return MODEL_COSTS.get(modelId) ?? DEFAULT_MODEL_COST
-}
-
-/**
- * Get a plan by its Stripe Price ID.
- */
-export function getPlanByPriceId(priceId: string): Plan | undefined {
-  return Object.values(PLANS).find((p) => p.stripePriceId === priceId)
 }

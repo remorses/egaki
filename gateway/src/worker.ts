@@ -22,7 +22,7 @@ import { Resend } from 'resend'
 import type { Env } from './env.js'
 import { requireEnv, getPublicUrl } from './env.js'
 import { EgakiKv, type ApiKeyRecord } from './kv.js'
-import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getPlanByPriceId, type PlanId, type Plan } from './plans.js'
+import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getStripePriceId, getPlanByPriceId, type PlanId, type Plan } from './plans.js'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -300,13 +300,14 @@ app.get('/buy', async (c) => {
       return c.text(`Invalid plan: ${planId}. Available: ${PLAN_IDS.join(', ')}`, 400)
     }
 
+    const stripePriceId = getStripePriceId(planId, c.env)
     const stripe = new Stripe(stripeSecret)
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       allow_promotion_codes: true,
       success_url: `${publicUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${publicUrl}/success?canceled=1`,
-      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+      line_items: [{ price: stripePriceId, quantity: 1 }],
       customer_email: email || undefined,
       metadata: { plan: planId },
     })
@@ -399,8 +400,12 @@ app.post('/stripe/webhook', async (c) => {
   const valid = await verifyStripeSignature(body, sig, secret)
   if (!valid) return c.text('Invalid Stripe signature', 400)
 
-  const event = JSON.parse(body) as { type: string; data: { object: any } }
+  const event = JSON.parse(body) as { type: string; account?: string; data: { object: any } }
   const kv = new EgakiKv(c.env.EGAKI_KV)
+
+  // Stripe account that sent this event (useful for tracking which account
+  // owns each subscription, so switching Stripe accounts is possible later)
+  const stripeAccountId = event.account || 'self'
 
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as {
@@ -418,12 +423,15 @@ app.post('/stripe/webhook', async (c) => {
       const planId = (session.metadata?.plan || DEFAULT_PLAN) as PlanId
       const plan = PLANS[planId] || PLANS[DEFAULT_PLAN]
       const email = session.customer_details?.email || session.customer_email || undefined
+      const stripePriceId = getStripePriceId(plan.id, c.env)
 
       const record: ApiKeyRecord = {
         status: 'active',
         plan: plan.id,
         subscriptionId: session.subscription || undefined,
         customerId: session.customer || undefined,
+        stripePriceId,
+        stripeAccountId,
         email,
         dollarsUsed: 0,
         spendingCap: plan.price,
@@ -432,10 +440,18 @@ app.post('/stripe/webhook', async (c) => {
       }
 
       await kv.setApiKey(apiKey, record)
-      await kv.setCheckoutApiKey(session.id, apiKey)
+      await kv.setCheckoutRecord(session.id, {
+        apiKey,
+        stripeAccountId,
+        createdAt: Date.now(),
+      })
 
       if (session.subscription) {
-        await kv.setSubscriptionApiKey(session.subscription, apiKey)
+        await kv.setSubRecord(session.subscription, {
+          apiKey,
+          stripeAccountId,
+          createdAt: Date.now(),
+        })
       }
 
       if (email) {
@@ -467,10 +483,11 @@ app.post('/stripe/webhook', async (c) => {
         record.status = isActive ? 'active' : 'canceled'
         record.updatedAt = Date.now()
 
-        // Update plan if subscription items changed
+        // Update plan and price tracking if subscription items changed
         const priceId = subscription.items?.data?.[0]?.price?.id
         if (priceId) {
-          const plan = getPlanByPriceId(priceId)
+          record.stripePriceId = priceId
+          const plan = getPlanByPriceId(priceId, c.env)
           if (plan) {
             record.plan = plan.id
             record.spendingCap = plan.price
