@@ -5,17 +5,24 @@
 //
 // Two generation paths depending on model:
 //   - imagen-* models → generateImage() with google.image()
-//   - gemini-*-image* models → generateText() with responseModalities: ['IMAGE']
-// The CLI auto-detects which path to use based on model ID.
+//   - all other models → generateText() with responseModalities: ['IMAGE']
+// The CLI auto-detects which path to use based on model ID prefix.
 import { goke } from 'goke'
 import { z } from 'zod'
+import dedent from 'string-dedent'
 import { generateImage as aiGenerateImage, generateText } from 'ai'
-import { google } from '@ai-sdk/google'
 import fs from 'node:fs'
 import path from 'node:path'
 import pc from 'picocolors'
 import pkg from '../package.json' with { type: 'json' }
 import { injectCredentialsToEnv, PROVIDERS } from './credentials.js'
+import {
+  IMAGE_MODELS,
+  DEFAULT_MODEL,
+  getModelConfig,
+  createImageModel,
+  createTextModel,
+} from './models.js'
 import {
   loginInteractive,
   loginNonInteractive,
@@ -28,36 +35,17 @@ const cli = goke('egaki')
 
 process.title = 'egaki'
 
-// Image-capable model IDs from @ai-sdk/google (GoogleGenerativeAIImageModelId
-// and GoogleGenerativeAIModelId). Only models that support image generation are
-// listed here. Imagen models use the dedicated generateImage() API, while
-// gemini-*-image* models use generateText() with responseModalities: ['IMAGE'].
-// To update this list, check the GoogleGenerativeAIImageModelId and
-// GoogleGenerativeAIModelId types in @ai-sdk/google/dist/index.d.ts.
-const IMAGE_MODELS = [
-  // Imagen — dedicated image generation API
-  'imagen-4.0-generate-001',
-  'imagen-4.0-ultra-generate-001',
-  'imagen-4.0-fast-generate-001',
-  // Gemini — text API with image output (responseModalities: ['IMAGE'])
-  'gemini-2.0-flash-exp-image-generation',
-  'gemini-2.5-flash-image',
-  'gemini-3-pro-image-preview',
-] as const
-
-const DEFAULT_MODEL: (typeof IMAGE_MODELS)[number] = 'imagen-4.0-generate-001'
-
 // ─── login command ───────────────────────────────────────────────────────────
 
 cli
   .command(
     'login',
-    [
-      'Configure API keys for image generation providers.',
-      'Interactive mode: shows a provider picker and secure key input.',
-      'Non-interactive mode: pass --provider and --key flags, or pipe key via stdin.',
-      'Keys are saved to ~/.config/egaki/credentials.json (mode 0600).',
-    ].join(' '),
+    dedent`
+      Configure API keys for image generation providers.
+      Interactive mode: shows a provider picker and secure key input.
+      Non-interactive mode: pass --provider and --key flags, or pipe key via stdin.
+      Keys are saved to ~/.config/egaki/credentials.json (mode 0600).
+    `,
   )
   .option(
     '-p, --provider [name]',
@@ -113,13 +101,13 @@ cli
 cli
   .command(
     'image <prompt>',
-    [
-      'Generate images from a text prompt using AI models.',
-      'Supports Imagen models (dedicated image generation) and Gemini',
-      'multimodal models (text+image output). The model type is auto-detected',
-      'from the model ID: imagen-* uses the image API, gemini-*-image* uses',
-      'the text API with image output enabled.',
-    ].join(' '),
+    dedent`
+      Generate images from a text prompt using AI models.
+      Supports Imagen models (dedicated image generation) and Gemini
+      multimodal models (text+image output). The model type is auto-detected
+      from the model ID: imagen-* uses the image API, everything else uses
+      the text API with image output enabled.
+    `,
   )
   .option(
     '-m, --model [model]',
@@ -142,14 +130,6 @@ cli
       .string()
       .describe(
         'Aspect ratio for the generated image. Imagen supports: 1:1, 3:4, 4:3, 9:16, 16:9. Gemini supports additional ratios: 2:3, 3:2, 4:5, 5:4, 21:9',
-      ),
-  )
-  .option(
-    '--size [size]',
-    z
-      .string()
-      .describe(
-        'Image dimensions as WIDTHxHEIGHT (e.g. 1024x1024). Only supported by some models',
       ),
   )
   .option(
@@ -214,22 +194,40 @@ cli
 
     const model = options.model
     const outputPath = options.output
-    const useTextModel = isTextImageModel(model)
+    const config = getModelConfig(model)
 
     if (!options.stdout) {
       console.error(pc.dim(`Model: ${model}`))
       console.error(pc.dim(`Prompt: ${prompt}`))
-      if (useTextModel) {
-        console.error(pc.dim('Mode: Gemini multimodal (generateText)'))
-      } else {
-        console.error(pc.dim('Mode: Image model (generateImage)'))
-      }
+      console.error(
+        pc.dim(
+          config.strategy === 'image'
+            ? 'Mode: Image API (generateImage)'
+            : 'Mode: Text+Image (generateText)',
+        ),
+      )
     }
 
     const inputImages = await readInputImages(options.input)
-    const maskImage = options.mask ? await readInputSource(options.mask) : undefined
+    const maskImage = options.mask
+      ? await readInputSource(options.mask)
+      : undefined
 
-    if (useTextModel) {
+    if (config.strategy === 'image') {
+      await generateWithImageModel({
+        prompt,
+        model,
+        outputPath,
+        count: options.count,
+        aspectRatio: options.aspectRatio as `${number}:${number}` | undefined,
+        seed: options.seed,
+        inputImages,
+        maskImage,
+        allowPeople: options.allowPeople || false,
+        json: options.json || false,
+        stdout: options.stdout || false,
+      })
+    } else {
       await generateWithTextModel({
         prompt,
         model,
@@ -240,35 +238,12 @@ cli
         json: options.json || false,
         stdout: options.stdout || false,
       })
-    } else {
-      await generateWithImageModel({
-        prompt,
-        model,
-        outputPath,
-        count: options.count,
-        aspectRatio: options.aspectRatio as `${number}:${number}` | undefined,
-        size: options.size as `${number}x${number}` | undefined,
-        seed: options.seed,
-        inputImages,
-        maskImage,
-        allowPeople: options.allowPeople || false,
-        json: options.json || false,
-        stdout: options.stdout || false,
-      })
     }
   })
 
 cli.help()
 cli.version(pkg.version)
 cli.parse()
-
-// Auto-detect whether a model should use the text API (generateText with
-// responseModalities) or the dedicated image API (generateImage).
-// Gemini models with "image" in their name generate images as file parts
-// via the text API. Everything else (imagen-*, etc.) uses the image API.
-function isTextImageModel(model: string): boolean {
-  return /^gemini-.+-image/.test(model)
-}
 
 function isUrl(input: string): boolean {
   return /^https?:\/\//i.test(input)
@@ -308,7 +283,6 @@ async function generateWithImageModel({
   outputPath,
   count,
   aspectRatio,
-  size,
   seed,
   inputImages,
   maskImage,
@@ -321,7 +295,6 @@ async function generateWithImageModel({
   outputPath: string
   count: number
   aspectRatio?: `${number}:${number}`
-  size?: `${number}x${number}`
   seed?: number
   inputImages: Uint8Array[]
   maskImage?: Uint8Array
@@ -329,21 +302,22 @@ async function generateWithImageModel({
   json: boolean
   stdout: boolean
 }) {
-  if (!stdout) {
-    console.error(pc.cyan('Generating...'))
-  }
-
   // Build the prompt: plain string or multimodal with reference images
   const imagePrompt = inputImages.length > 0
     ? { text: prompt, images: inputImages, ...(maskImage ? { mask: maskImage } : {}) }
     : prompt
 
+  const imageModel = await createImageModel(model)
+
+  if (!stdout) {
+    console.error(pc.cyan('Generating...'))
+  }
+
   const result = await aiGenerateImage({
-    model: google.image(model),
+    model: imageModel,
     prompt: imagePrompt,
     n: count,
     ...(aspectRatio ? { aspectRatio } : {}),
-    ...(size ? { size } : {}),
     ...(seed !== undefined ? { seed } : {}),
     providerOptions: {
       google: {
@@ -408,6 +382,8 @@ async function generateWithTextModel({
   json: boolean
   stdout: boolean
 }) {
+  const textModel = await createTextModel(model)
+
   if (!stdout) {
     console.error(pc.cyan('Generating...'))
   }
@@ -429,7 +405,7 @@ async function generateWithTextModel({
     : undefined
 
   const result = await generateText({
-    model: google(model),
+    model: textModel,
     ...(messages ? { messages } : { prompt }),
     providerOptions: {
       google: {
