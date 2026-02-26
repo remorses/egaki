@@ -22,7 +22,7 @@ import { Resend } from 'resend'
 import type { Env } from './env.js'
 import { requireEnv, getPublicUrl } from './env.js'
 import { EgakiKv, type ApiKeyRecord } from './kv.js'
-import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getStripePriceId, getPlanByPriceId, type PlanId, type Plan } from './plans.js'
+import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getStripePriceId, getPlanByPriceId, type PlanId, type Currency, type Plan } from './plans.js'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -295,12 +295,13 @@ app.get('/buy', async (c) => {
 
     const email = c.req.query('email')
     const planId = (c.req.query('plan') || DEFAULT_PLAN) as PlanId
+    const currency = (c.req.query('currency') || 'usd') as Currency
     const plan = PLANS[planId]
     if (!plan) {
       return c.text(`Invalid plan: ${planId}. Available: ${PLAN_IDS.join(', ')}`, 400)
     }
 
-    const stripePriceId = getStripePriceId(planId, c.env)
+    const stripePriceId = getStripePriceId(planId, currency, c.env)
     const stripe = new Stripe(stripeSecret)
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -423,7 +424,7 @@ app.post('/stripe/webhook', async (c) => {
       const planId = (session.metadata?.plan || DEFAULT_PLAN) as PlanId
       const plan = PLANS[planId] || PLANS[DEFAULT_PLAN]
       const email = session.customer_details?.email || session.customer_email || undefined
-      const stripePriceId = getStripePriceId(plan.id, c.env)
+      const stripePriceId = getStripePriceId(plan.id, 'usd', c.env)
 
       const record: ApiKeyRecord = {
         status: 'active',

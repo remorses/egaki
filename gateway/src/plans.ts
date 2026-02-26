@@ -47,32 +47,48 @@ export const PLANS: Record<PlanId, Plan> = {
 export const PLAN_IDS = Object.keys(PLANS) as PlanId[]
 export const DEFAULT_PLAN: PlanId = 'plus'
 
+export type Currency = 'usd' | 'eur'
+
 /**
  * Resolve a plan's Stripe Price ID from env secrets.
- * Price IDs are stored as STRIPE_PRICE_ID_PLUS, STRIPE_PRICE_ID_PRO.
+ * Price IDs are stored as STRIPE_PRICE_ID_{PLAN}_{CURRENCY}.
  */
-export function getStripePriceId(planId: PlanId, env: Env): string {
-  const map: Record<PlanId, string | undefined> = {
-    plus: env.STRIPE_PRICE_ID_PLUS,
-    pro: env.STRIPE_PRICE_ID_PRO,
+export function getStripePriceId(planId: PlanId, currency: Currency, env: Env): string {
+  const map: Record<string, string | undefined> = {
+    'plus:usd': env.STRIPE_PRICE_ID_PLUS_USD,
+    'plus:eur': env.STRIPE_PRICE_ID_PLUS_EUR,
+    'pro:usd': env.STRIPE_PRICE_ID_PRO_USD,
+    'pro:eur': env.STRIPE_PRICE_ID_PRO_EUR,
   }
-  const priceId = map[planId]
+  const priceId = map[`${planId}:${currency}`]
   if (!priceId) {
-    throw new Error(`Missing Stripe Price ID for plan: ${planId}`)
+    throw new Error(`Missing Stripe Price ID for plan: ${planId}, currency: ${currency}`)
   }
   return priceId
 }
 
 /**
- * Get a plan by its Stripe Price ID (checks against env secrets).
+ * Get all Stripe Price IDs for a given env (flattened for reverse lookup).
  */
-export function getPlanByPriceId(priceId: string, env: Env): Plan | undefined {
-  for (const plan of Object.values(PLANS)) {
-    if (getStripePriceId(plan.id, env) === priceId) {
-      return plan
+function getAllPriceIds(env: Env): Array<{ priceId: string; planId: PlanId; currency: Currency }> {
+  const result: Array<{ priceId: string; planId: PlanId; currency: Currency }> = []
+  for (const planId of PLAN_IDS) {
+    for (const currency of ['usd', 'eur'] as Currency[]) {
+      try {
+        const priceId = getStripePriceId(planId, currency, env)
+        result.push({ priceId, planId, currency })
+      } catch { /* skip missing */ }
     }
   }
-  return undefined
+  return result
+}
+
+/**
+ * Get a plan by its Stripe Price ID (checks against all env secrets).
+ */
+export function getPlanByPriceId(priceId: string, env: Env): Plan | undefined {
+  const match = getAllPriceIds(env).find((p) => p.priceId === priceId)
+  return match ? PLANS[match.planId] : undefined
 }
 
 // ── Per-model provider costs (derived from catalog) ──────────────────────
