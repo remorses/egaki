@@ -301,7 +301,7 @@ app.get('/buy', async (c) => {
       return c.text(`Invalid plan: ${planId}. Available: ${PLAN_IDS.join(', ')}`, 400)
     }
 
-    const stripePriceId = getStripePriceId(planId, currency, c.env)
+    const stripePriceId = getStripePriceId(planId, currency)
     const stripe = new Stripe(stripeSecret)
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
@@ -424,7 +424,7 @@ app.post('/stripe/webhook', async (c) => {
       const planId = (session.metadata?.plan || DEFAULT_PLAN) as PlanId
       const plan = PLANS[planId] || PLANS[DEFAULT_PLAN]
       const email = session.customer_details?.email || session.customer_email || undefined
-      const stripePriceId = getStripePriceId(plan.id, 'usd', c.env)
+      const stripePriceId = getStripePriceId(plan.id, 'usd')
 
       const record: ApiKeyRecord = {
         status: 'active',
@@ -488,7 +488,7 @@ app.post('/stripe/webhook', async (c) => {
         const priceId = subscription.items?.data?.[0]?.price?.id
         if (priceId) {
           record.stripePriceId = priceId
-          const plan = getPlanByPriceId(priceId, c.env)
+          const plan = getPlanByPriceId(priceId)
           if (plan) {
             record.plan = plan.id
             record.spendingCap = plan.price
