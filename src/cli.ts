@@ -23,6 +23,7 @@ import {
   createImageModel,
   createTextModel,
 } from './models.js'
+import type { ModelCost } from './model-catalog.js'
 import {
   loginInteractive,
   loginNonInteractive,
@@ -366,11 +367,18 @@ async function generateWithImageModel({
     savedFiles.push(filePath)
   }
 
+  const config = getModelConfig(model)
+  const cost = calculateCost(config.cost, result.usage, result.images.length)
+  if (cost != null) {
+    console.error(pc.dim(`Cost: ${formatCost(cost)}`))
+  }
+
   if (json) {
     const output = {
       model,
       files: savedFiles,
       count: result.images.length,
+      cost,
       usage: result.usage,
       warnings: result.warnings,
     }
@@ -469,6 +477,12 @@ async function generateWithTextModel({
     savedFiles.push(filePath)
   }
 
+  const config = getModelConfig(model)
+  const cost = calculateCost(config.cost, result.usage, imageFiles.length)
+  if (cost != null) {
+    console.error(pc.dim(`Cost: ${formatCost(cost)}`))
+  }
+
   if (result.text && !json) {
     console.error(pc.dim(result.text))
   }
@@ -479,10 +493,36 @@ async function generateWithTextModel({
       files: savedFiles,
       count: imageFiles.length,
       text: result.text || null,
+      cost,
       usage: result.usage,
     }
     console.log(JSON.stringify(output, null, 2))
   }
+}
+
+// ─── cost helpers ────────────────────────────────────────────────────────────
+
+function calculateCost(
+  cost: ModelCost,
+  usage: { inputTokens?: number; outputTokens?: number; imagesGenerated?: number },
+  imageCount: number,
+): number | null {
+  if (cost.type === 'per-image') {
+    return cost.perImage * imageCount
+  }
+  if (cost.type === 'per-token' && usage.inputTokens != null && usage.outputTokens != null) {
+    return (
+      (usage.inputTokens * cost.inputPerM + usage.outputTokens * cost.outputPerM) / 1_000_000
+    )
+  }
+  return null
+}
+
+function formatCost(dollars: number): string {
+  if (dollars < 0.01) {
+    return `$${dollars.toFixed(4)}`
+  }
+  return `$${dollars.toFixed(2)}`
 }
 
 function extensionFromMediaType(mediaType: string): string {
