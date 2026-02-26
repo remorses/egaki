@@ -13,99 +13,22 @@
 import type { ImageModel, LanguageModel } from 'ai'
 import pc from 'picocolors'
 import { PROVIDERS } from './credentials.js'
+import { CATALOG, findModel } from './model-catalog.js'
+import type { ModelEntry } from './model-catalog.js'
 
-type GenerationStrategy = 'image' | 'text'
+export type { ModelEntry }
 
-export type ModelConfig = {
-  provider: string
-  strategy: GenerationStrategy
-}
+export const IMAGE_MODELS = CATALOG.map((m) => m.id) as [string, ...string[]]
 
-// ─── registry ────────────────────────────────────────────────────────────────
-// Only image-generation-capable models are listed. Utility models (upscalers,
-// background removal, etc.) are excluded.
+export const DEFAULT_MODEL = 'nano-banana-pro-preview'
 
-const MODEL_REGISTRY = {
-  // ── Google: Imagen (generateImage) ─────────────────────────────────────
-  'imagen-4.0-generate-001': { provider: 'google', strategy: 'image' },
-  'imagen-4.0-ultra-generate-001': { provider: 'google', strategy: 'image' },
-  'imagen-4.0-fast-generate-001': { provider: 'google', strategy: 'image' },
-
-  // ── Google: Gemini + others (generateText with responseModalities) ─────
-  'gemini-2.0-flash-exp-image-generation': {
-    provider: 'google',
-    strategy: 'text',
-  },
-  'gemini-2.5-flash-image': { provider: 'google', strategy: 'text' },
-  'gemini-3-pro-image-preview': { provider: 'google', strategy: 'text' },
-  'nano-banana-pro-preview': { provider: 'google', strategy: 'text' },
-
-  // ── OpenAI (generateImage) ─────────────────────────────────────────────
-  'dall-e-2': { provider: 'openai', strategy: 'image' },
-  'dall-e-3': { provider: 'openai', strategy: 'image' },
-  'gpt-image-1': { provider: 'openai', strategy: 'image' },
-  'gpt-image-1-mini': { provider: 'openai', strategy: 'image' },
-  'gpt-image-1.5': { provider: 'openai', strategy: 'image' },
-
-  // ── Replicate (generateImage) ──────────────────────────────────────────
-  'black-forest-labs/flux-1.1-pro': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-1.1-pro-ultra': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-2-pro': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-2-dev': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-dev': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-pro': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-schnell': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-fill-pro': { provider: 'replicate', strategy: 'image' },
-  'black-forest-labs/flux-fill-dev': { provider: 'replicate', strategy: 'image' },
-  'ideogram-ai/ideogram-v2': { provider: 'replicate', strategy: 'image' },
-  'ideogram-ai/ideogram-v2-turbo': { provider: 'replicate', strategy: 'image' },
-  'recraft-ai/recraft-v3': { provider: 'replicate', strategy: 'image' },
-  'recraft-ai/recraft-v3-svg': { provider: 'replicate', strategy: 'image' },
-  'stability-ai/stable-diffusion-3.5-large': { provider: 'replicate', strategy: 'image' },
-  'stability-ai/stable-diffusion-3.5-large-turbo': { provider: 'replicate', strategy: 'image' },
-  'stability-ai/stable-diffusion-3.5-medium': { provider: 'replicate', strategy: 'image' },
-  'luma/photon': { provider: 'replicate', strategy: 'image' },
-  'luma/photon-flash': { provider: 'replicate', strategy: 'image' },
-  'nvidia/sana': { provider: 'replicate', strategy: 'image' },
-
-  // ── Fal (generateImage) ────────────────────────────────────────────────
-  'fal-ai/flux/schnell': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux/dev': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-general': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-general/inpainting': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-general/image-to-image': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-pro/v1.1': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-pro/v1.1-ultra': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-pro/kontext': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-pro/kontext/max': { provider: 'fal', strategy: 'image' },
-  'fal-ai/flux-lora': { provider: 'fal', strategy: 'image' },
-  'fal-ai/recraft/v3/text-to-image': { provider: 'fal', strategy: 'image' },
-  'fal-ai/recraft/v3/image-to-image': { provider: 'fal', strategy: 'image' },
-  'fal-ai/ideogram/character': { provider: 'fal', strategy: 'image' },
-  'fal-ai/imagen4/preview': { provider: 'fal', strategy: 'image' },
-  'fal-ai/luma-photon': { provider: 'fal', strategy: 'image' },
-  'fal-ai/luma-photon/flash': { provider: 'fal', strategy: 'image' },
-  'fal-ai/omnigen-v2': { provider: 'fal', strategy: 'image' },
-  'fal-ai/qwen-image': { provider: 'fal', strategy: 'image' },
-} as const satisfies Record<string, ModelConfig>
-
-export type ModelId = keyof typeof MODEL_REGISTRY
-
-export const IMAGE_MODELS = Object.keys(MODEL_REGISTRY) as [
-  ModelId,
-  ...ModelId[],
-]
-
-export const DEFAULT_MODEL: ModelId = 'nano-banana-pro-preview'
-
-export function getModelConfig(modelId: string): ModelConfig {
-  const config = MODEL_REGISTRY[modelId as ModelId]
-  if (!config) {
-    // Should not happen if the enum validation passes, but just in case
+export function getModelConfig(modelId: string): ModelEntry {
+  const entry = findModel(modelId)
+  if (!entry) {
     console.error(pc.red(`Unknown model: ${modelId}`))
     process.exit(1)
   }
-  return config
+  return entry
 }
 
 // Check that the provider's API key is available before making API calls.
@@ -161,7 +84,9 @@ export async function createImageModel(modelId: string): Promise<ImageModel> {
       return fal.image(modelId)
     }
     default:
-      console.error(pc.red(`No image model support for provider: ${config.provider}`))
+      console.error(
+        pc.red(`No image model support for provider: ${config.provider}`),
+      )
       process.exit(1)
   }
 }
