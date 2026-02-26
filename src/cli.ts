@@ -258,6 +258,60 @@ cli
     }
   })
 
+// ─── models command ──────────────────────────────────────────────────────────
+
+cli
+  .command(
+    'models',
+    dedent`
+      List all supported image generation models with pricing, features,
+      and provider info. Output is YAML for easy reading and piping.
+    `,
+  )
+  .option(
+    '-p, --provider [provider]',
+    z.string().describe('Filter models by provider name (e.g. google, openai, replicate, fal)'),
+  )
+  .option('--json', 'Output as JSON instead of YAML')
+  .action(async (options) => {
+    const { CATALOG } = await import('./model-catalog.js')
+    const yaml = await import('js-yaml')
+
+    let models = CATALOG
+    if (options.provider) {
+      models = models.filter((m) => m.provider === options.provider)
+      if (models.length === 0) {
+        console.error(pc.red(`No models found for provider: ${options.provider}`))
+        process.exit(1)
+      }
+    }
+
+    const output = models.map((m) => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+      strategy: m.strategy,
+      cost:
+        m.cost.type === 'per-image'
+          ? `$${m.cost.perImage}/image`
+          : `$${m.cost.inputPerM}/M input, $${m.cost.outputPerM}/M output`,
+      features: {
+        editing: m.features.editing,
+        inpainting: m.features.inpainting,
+        seed: m.features.seed,
+        multipleImages: m.features.multipleImages,
+        aspectRatios: m.features.aspectRatios.join(', ') || 'none',
+        ...(m.features.sizes ? { sizes: m.features.sizes.join(', ') } : {}),
+      },
+    }))
+
+    if (options.json) {
+      console.log(JSON.stringify(output, null, 2))
+    } else {
+      console.log(yaml.dump(output, { lineWidth: 120, noRefs: true }))
+    }
+  })
+
 cli.help()
 cli.version(pkg.version)
 cli.parse()
