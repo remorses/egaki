@@ -28,7 +28,24 @@ const cli = goke('egaki')
 
 process.title = 'egaki'
 
-const DEFAULT_MODEL = 'imagen-4.0-generate-001'
+// Image-capable model IDs from @ai-sdk/google (GoogleGenerativeAIImageModelId
+// and GoogleGenerativeAIModelId). Only models that support image generation are
+// listed here. Imagen models use the dedicated generateImage() API, while
+// gemini-*-image* models use generateText() with responseModalities: ['IMAGE'].
+// To update this list, check the GoogleGenerativeAIImageModelId and
+// GoogleGenerativeAIModelId types in @ai-sdk/google/dist/index.d.ts.
+const IMAGE_MODELS = [
+  // Imagen — dedicated image generation API
+  'imagen-4.0-generate-001',
+  'imagen-4.0-ultra-generate-001',
+  'imagen-4.0-fast-generate-001',
+  // Gemini — text API with image output (responseModalities: ['IMAGE'])
+  'gemini-2.0-flash-exp-image-generation',
+  'gemini-2.5-flash-image',
+  'gemini-3-pro-image-preview',
+] as const
+
+const DEFAULT_MODEL: (typeof IMAGE_MODELS)[number] = 'imagen-4.0-generate-001'
 
 // ─── login command ───────────────────────────────────────────────────────────
 
@@ -106,7 +123,7 @@ cli
   )
   .option(
     '-m, --model [model]',
-    z.string().default(DEFAULT_MODEL).describe('Model ID for generation'),
+    z.enum(IMAGE_MODELS).default(DEFAULT_MODEL).describe('Model ID for generation'),
   )
   .option(
     '-o, --output [path]',
