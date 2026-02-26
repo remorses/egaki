@@ -7,12 +7,17 @@
 //   - 'image': uses provider.image(modelId) + generateImage()
 //   - 'text':  uses provider(modelId) + generateText() with responseModalities
 //
+// Provider resolution priority:
+//   1. Provider-specific key (e.g. GOOGLE_GENERATIVE_AI_API_KEY) → direct SDK
+//   2. Egaki API key (EGAKI_API_KEY) → route through egaki gateway
+//   3. No key → error with subscription recommendation
+//
 // Model IDs are sourced from the TypeScript types exported by each @ai-sdk/*
 // package. To add new models, check the *ModelId types in each package's
 // dist/index.d.ts and add entries here.
 import type { ImageModel, LanguageModel } from 'ai'
 import pc from 'picocolors'
-import { PROVIDERS } from './credentials.js'
+import { PROVIDERS, EGAKI_GATEWAY_URL } from './credentials.js'
 import { CATALOG, findModel } from './model-catalog.js'
 import type { ModelEntry } from './model-catalog.js'
 
@@ -31,64 +36,131 @@ export function getModelConfig(modelId: string): ModelEntry {
   return entry
 }
 
+/**
+ * Check if the egaki gateway API key is available (from env or stored credentials).
+ */
+function hasEgakiKey(): boolean {
+  const info = PROVIDERS['egaki']
+  if (!info) return false
+  return Boolean(process.env[info.envVar])
+}
+
+/**
+ * Check if a direct provider key is available for the given provider.
+ */
+function hasDirectProviderKey(providerName: string): boolean {
+  const info = PROVIDERS[providerName]
+  if (!info) return false
+  return Boolean(process.env[info.envVar])
+}
+
 // Check that the provider's API key is available before making API calls.
 // Prints a user-friendly error with instructions on how to configure it.
+// Prioritizes egaki subscription over individual provider keys.
 export function ensureProviderKey(providerName: string): void {
+  // If direct provider key exists, we're good
+  if (hasDirectProviderKey(providerName)) return
+
+  // If egaki key exists, we'll route through the gateway
+  if (hasEgakiKey()) return
+
   const info = PROVIDERS[providerName]
-  if (!info) return
-
-  if (process.env[info.envVar]) return
 
   console.error('')
-  console.error(pc.red(pc.bold(`Missing API key for ${info.label}`)))
+  console.error(pc.red(pc.bold(`Missing API key for ${info?.label || providerName}`)))
   console.error('')
-  console.error(`  Set it with any of these:`)
+  console.error(`  ${pc.bold('Recommended:')} Use Egaki subscription (all models, one key)`)
+  console.error('')
+  console.error(
+    `    ${pc.cyan('egaki subscribe')}                        get started in 30 seconds`,
+  )
+  console.error('')
+  console.error(`  ${pc.dim('Or configure a provider key directly:')}`)
   console.error('')
   console.error(
     `    ${pc.cyan('egaki login')}                           interactive setup`,
   )
-  console.error(
-    `    ${pc.cyan(`${info.envVar}=...`)} egaki image ...   inline env var`,
-  )
-  console.error(
-    `    ${pc.cyan(`egaki login --provider ${providerName} --key <key>`)}`,
-  )
-  console.error('')
-  console.error(`  ${pc.dim(info.hint)}`)
+  if (info) {
+    console.error(
+      `    ${pc.cyan(`${info.envVar}=...`)} egaki image ...   inline env var`,
+    )
+    console.error(
+      `    ${pc.cyan(`egaki login --provider ${providerName} --key <key>`)}`,
+    )
+    console.error('')
+    console.error(`  ${pc.dim(info.hint)}`)
+  }
   console.error('')
   process.exit(1)
+}
+
+/**
+ * Create a gateway-backed image model using createGateway from the AI SDK.
+ * The model ID is sent as provider/model format to the gateway.
+ */
+async function createGatewayImageModel(modelId: string, provider: string): Promise<ImageModel> {
+  const { createGateway } = await import('ai')
+  const gateway = createGateway({
+    apiKey: process.env['EGAKI_API_KEY']!,
+    baseURL: EGAKI_GATEWAY_URL,
+  })
+  // Gateway expects provider/model format for routing
+  const gatewayModelId = `${provider}/${modelId}`
+  return gateway.image(gatewayModelId)
+}
+
+/**
+ * Create a gateway-backed text model using createGateway from the AI SDK.
+ */
+async function createGatewayTextModel(modelId: string, provider: string): Promise<LanguageModel> {
+  const { createGateway } = await import('ai')
+  const gateway = createGateway({
+    apiKey: process.env['EGAKI_API_KEY']!,
+    baseURL: EGAKI_GATEWAY_URL,
+  })
+  const gatewayModelId = `${provider}/${modelId}`
+  return gateway(gatewayModelId)
 }
 
 // Lazily import the provider and create the right model instance.
 // This avoids loading all provider SDKs upfront — only the one needed
 // for the selected model gets imported.
+//
+// Priority: direct provider key > egaki gateway > error
 export async function createImageModel(modelId: string): Promise<ImageModel> {
   const config = getModelConfig(modelId)
   ensureProviderKey(config.provider)
 
-  switch (config.provider) {
-    case 'google': {
-      const { google } = await import('@ai-sdk/google')
-      return google.image(modelId)
+  // If the user has a direct provider key, use the provider SDK directly
+  if (hasDirectProviderKey(config.provider)) {
+    switch (config.provider) {
+      case 'google': {
+        const { google } = await import('@ai-sdk/google')
+        return google.image(modelId)
+      }
+      case 'openai': {
+        const { openai } = await import('@ai-sdk/openai')
+        return openai.image(modelId)
+      }
+      case 'replicate': {
+        const { replicate } = await import('@ai-sdk/replicate')
+        return replicate.image(modelId)
+      }
+      case 'fal': {
+        const { fal } = await import('@ai-sdk/fal')
+        return fal.image(modelId)
+      }
     }
-    case 'openai': {
-      const { openai } = await import('@ai-sdk/openai')
-      return openai.image(modelId)
-    }
-    case 'replicate': {
-      const { replicate } = await import('@ai-sdk/replicate')
-      return replicate.image(modelId)
-    }
-    case 'fal': {
-      const { fal } = await import('@ai-sdk/fal')
-      return fal.image(modelId)
-    }
-    default:
-      console.error(
-        pc.red(`No image model support for provider: ${config.provider}`),
-      )
-      process.exit(1)
   }
+
+  // Fall back to egaki gateway
+  if (hasEgakiKey()) {
+    return createGatewayImageModel(modelId, config.provider)
+  }
+
+  // Should not reach here — ensureProviderKey would have exited
+  console.error(pc.red(`No API key available for provider: ${config.provider}`))
+  process.exit(1)
 }
 
 export async function createTextModel(
@@ -97,18 +169,29 @@ export async function createTextModel(
   const config = getModelConfig(modelId)
   ensureProviderKey(config.provider)
 
-  switch (config.provider) {
-    case 'google': {
-      const { google } = await import('@ai-sdk/google')
-      return google(modelId)
+  // Direct provider key takes priority
+  if (hasDirectProviderKey(config.provider)) {
+    switch (config.provider) {
+      case 'google': {
+        const { google } = await import('@ai-sdk/google')
+        return google(modelId)
+      }
+      default:
+        // Only Google supports generateText with responseModalities for images
+        console.error(
+          pc.red(
+            `Text+image generation is only supported for Google models, got provider: ${config.provider}`,
+          ),
+        )
+        process.exit(1)
     }
-    default:
-      // Only Google supports generateText with responseModalities for images
-      console.error(
-        pc.red(
-          `Text+image generation is only supported for Google models, got provider: ${config.provider}`,
-        ),
-      )
-      process.exit(1)
   }
+
+  // Fall back to egaki gateway
+  if (hasEgakiKey()) {
+    return createGatewayTextModel(modelId, config.provider)
+  }
+
+  console.error(pc.red(`No API key available for provider: ${config.provider}`))
+  process.exit(1)
 }
