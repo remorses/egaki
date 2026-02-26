@@ -57,7 +57,9 @@ export async function loginInteractive(): Promise<void> {
     process.exit(1)
   }
 
-  log.info(`${pc.dim('Env var:')} ${info.envVar}`)
+  log.info(
+    `${pc.dim('Env var:')} ${info.envVar} ${pc.dim('(also used by the CLI when set)')}`,
+  )
   log.info(`${pc.dim('Get key:')} ${info.hint}`)
 
   const key = await password({
@@ -78,7 +80,7 @@ export async function loginInteractive(): Promise<void> {
 
   log.success(`${info.label} key saved`)
   note(
-    `If you prefer env vars instead, set ${pc.bold(info.envVar)} in your shell.`,
+    `You can also set ${pc.bold(info.envVar)} as an env var.\nThe CLI reads it automatically, so you can pass it inline too:\n  ${pc.dim(`${info.envVar}=... egaki generate "prompt"`)}`,
     'Tip',
   )
 
@@ -125,7 +127,9 @@ export function showLoginStatus(): void {
       }
       return pc.dim('(not set)')
     })()
-    const envHint = pc.dim(`  env: ${info.envVar}`)
+    const envHint = pc.dim(
+      `  env: ${info.envVar} (set in shell or pass inline to CLI)`,
+    )
     console.log(`${icon} ${info.label} ${source}`)
     console.log(envHint)
   }
