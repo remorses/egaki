@@ -148,9 +148,10 @@ export const CATALOG: ModelEntry[] = [
     id: 'nano-banana-pro-preview',
     name: 'Nano Banana Pro',
     description:
-      'Original Nano Banana model (v1). Uses Gemini Pro backbone for highest visual fidelity ' +
-      'and advanced editing but at Pro-tier pricing and slower speed. Best for complex scenes ' +
-      'requiring maximum quality. Superseded by Nano Banana 2 for most use cases.',
+      'Nano Banana Pro — the high-fidelity variant in the Nano Banana line, built on the ' +
+      'Gemini Pro backbone. Best for complex scenes requiring maximum quality at the expense ' +
+      'of higher cost and slower speed. Still the best fit for specialized high-fidelity tasks ' +
+      'where Nano Banana 2 trades off some quality for much faster, cheaper generation.',
     released: '2025-11-20',
     ...googleText,
     cost: { type: 'per-token', inputPerM: 0.3, outputPerM: 30 },
@@ -159,12 +160,12 @@ export const CATALOG: ModelEntry[] = [
     id: 'gemini-3.1-flash-image-preview',
     name: 'Gemini 3.1 Flash Image (Nano Banana 2)',
     description:
-      'Nano Banana 2 — successor to Nano Banana Pro. Delivers Pro-level visual quality at ' +
-      'Flash speed and ~10x lower cost. Built on Gemini 3.1 Flash backbone instead of Pro. ' +
-      'Key upgrades over v1: consistent rendering of up to 5 characters per workflow, new ' +
-      'native aspect ratios (4:1, 1:4, 8:1, 1:8), resolutions from 512px to 4K, improved ' +
-      'text rendering and in-image localization. Replaces both standard and Pro variants of ' +
-      'the original Nano Banana for most workflows.',
+      'Nano Banana 2 — high-efficiency successor in the Nano Banana line. Targets Pro-like ' +
+      'quality with faster iteration and lower cost. Built on Gemini 3.1 Flash backbone. ' +
+      'Key upgrades: consistent rendering of up to 5 characters per workflow, new native ' +
+      'aspect ratios (4:1, 1:4, 8:1, 1:8), resolutions from 512px to 4K, improved text ' +
+      'rendering and in-image localization. Nano Banana Pro remains the best fit for ' +
+      'specialized high-fidelity tasks.',
     released: '2026-02-26',
     ...googleText,
     features: {
@@ -256,21 +257,9 @@ export const CATALOG: ModelEntry[] = [
       multipleImages: true,
     },
   },
-  {
-    id: 'chatgpt-image-latest',
-    name: 'ChatGPT Image',
-    released: '2026-01',
-    ...openaiImage,
-    cost: { type: 'per-image', perImage: 0.034 },
-    features: {
-      editing: true,
-      inpainting: true,
-      aspectRatios: [],
-      sizes: ['1024x1024', '1536x1024', '1024x1536'],
-      seed: false,
-      multipleImages: true,
-    },
-  },
+  // NOTE: chatgpt-image-latest exists in OpenAI's .d.ts types but it's a moving
+  // alias used by ChatGPT/Responses API, not a stable image endpoint model.
+  // Omitted until OpenAI stabilizes it as a first-class image generation target.
 
   // ── Replicate ──────────────────────────────────────────────────────────
   {
