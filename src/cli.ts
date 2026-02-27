@@ -359,6 +359,7 @@ cli
     const output = models.map((m) => ({
       id: m.id,
       name: m.name,
+      ...(m.description ? { description: m.description } : {}),
       provider: m.provider,
       strategy: m.strategy,
       released: m.released,

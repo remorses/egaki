@@ -42,6 +42,8 @@ export type ModelFeatures = {
 export type ModelEntry = {
   id: string
   name: string
+  /** Optional longer description shown in `egaki models` output */
+  description?: string
   provider: string
   strategy: 'image' | 'text'
   /** Release date in YYYY-MM-DD or YYYY-MM format */
@@ -145,6 +147,10 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'nano-banana-pro-preview',
     name: 'Nano Banana Pro',
+    description:
+      'Original Nano Banana model (v1). Uses Gemini Pro backbone for highest visual fidelity ' +
+      'and advanced editing but at Pro-tier pricing and slower speed. Best for complex scenes ' +
+      'requiring maximum quality. Superseded by Nano Banana 2 for most use cases.',
     released: '2025-11-20',
     ...googleText,
     cost: { type: 'per-token', inputPerM: 0.3, outputPerM: 30 },
@@ -152,6 +158,13 @@ export const CATALOG: ModelEntry[] = [
   {
     id: 'gemini-3.1-flash-image-preview',
     name: 'Gemini 3.1 Flash Image (Nano Banana 2)',
+    description:
+      'Nano Banana 2 — successor to Nano Banana Pro. Delivers Pro-level visual quality at ' +
+      'Flash speed and ~10x lower cost. Built on Gemini 3.1 Flash backbone instead of Pro. ' +
+      'Key upgrades over v1: consistent rendering of up to 5 characters per workflow, new ' +
+      'native aspect ratios (4:1, 1:4, 8:1, 1:8), resolutions from 512px to 4K, improved ' +
+      'text rendering and in-image localization. Replaces both standard and Pro variants of ' +
+      'the original Nano Banana for most workflows.',
     released: '2026-02-26',
     ...googleText,
     features: {
