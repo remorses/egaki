@@ -149,6 +149,23 @@ export const CATALOG: ModelEntry[] = [
     ...googleText,
     cost: { type: 'per-token', inputPerM: 0.3, outputPerM: 30 },
   },
+  {
+    id: 'gemini-3.1-flash-image-preview',
+    name: 'Gemini 3.1 Flash Image (Nano Banana 2)',
+    released: '2026-02-26',
+    ...googleText,
+    features: {
+      ...googleText.features,
+      aspectRatios: [
+        ...googleText.features.aspectRatios,
+        '4:1',
+        '1:4',
+        '8:1',
+        '1:8',
+      ],
+    },
+    cost: { type: 'per-token', inputPerM: 0.5, outputPerM: 3.0 },
+  },
 
   // ── OpenAI ─────────────────────────────────────────────────────────────
   {
@@ -215,6 +232,21 @@ export const CATALOG: ModelEntry[] = [
     id: 'gpt-image-1.5',
     name: 'GPT Image 1.5',
     released: '2025-12-16',
+    ...openaiImage,
+    cost: { type: 'per-image', perImage: 0.034 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: [],
+      sizes: ['1024x1024', '1536x1024', '1024x1536'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
+  {
+    id: 'chatgpt-image-latest',
+    name: 'ChatGPT Image',
+    released: '2026-01',
     ...openaiImage,
     cost: { type: 'per-image', perImage: 0.034 },
     features: {
