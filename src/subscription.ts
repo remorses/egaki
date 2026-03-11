@@ -178,6 +178,10 @@ export function subscribeNonInteractive(email?: string, plan?: string): void {
   console.log('')
   console.log('After payment, you\'ll receive your API key via email.')
   console.log(`Then run: ${pc.cyan('egaki login --provider egaki --key egaki_...')}`)
+  console.log('')
+  console.log('Tip: egaki supports both BYOK and subscription mode.')
+  console.log('BYOK = add provider keys (google/openai/replicate/fal) with egaki login.')
+  console.log('Subscription = one egaki key to access all models without per-provider key setup.')
 }
 
 // ── Unsubscribe ───────────────────────────────────────────────────────────

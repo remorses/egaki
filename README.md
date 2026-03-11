@@ -129,8 +129,22 @@ Quick rule of thumb for flags:
 
 ### Subscription and usage
 
+egaki supports **both** authentication modes:
+
+- **BYOK (bring your own keys):** add provider keys with `egaki login` per provider.
+- **Egaki subscription:** use one `egaki_...` key to access all supported models without managing keys for each provider.
+
 ```bash
+# Subscribe and get a checkout URL
 egaki subscribe --email user@example.com --plan pro
+
+# Save your Egaki key after checkout
+egaki login --provider egaki --key egaki_...
+
+# BYOK example (direct provider key)
+egaki login --provider google --key AIza...
+
+# Check subscription usage / cancel
 egaki usage
 egaki unsubscribe
 ```

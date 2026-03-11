@@ -126,6 +126,9 @@ cli
     'subscribe',
     dedent`
       Subscribe to Egaki for access to all image models with a single API key.
+      You can also use your own provider keys (Google/OpenAI/Replicate/Fal)
+      via 'egaki login --provider <name> --key <key>' if you prefer BYOK.
+      Egaki subscription avoids managing one key per provider.
       Three plans: Starter ($9/mo, 100 credits), Pro ($29/mo, 500 credits),
       Unlimited ($99/mo, 2000 credits). One credit ≈ one standard image.
       Interactive mode: pick a plan, enter email, get checkout URL.
