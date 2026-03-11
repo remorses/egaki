@@ -94,6 +94,21 @@ const falImage = {
   strategy: 'image' as const,
 }
 
+const bflImage = {
+  provider: 'bfl',
+  strategy: 'image' as const,
+}
+
+const recraftImage = {
+  provider: 'recraft',
+  strategy: 'image' as const,
+}
+
+const xaiImage = {
+  provider: 'xai',
+  strategy: 'image' as const,
+}
+
 const fluxAspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9', '9:21', '21:9']
 
 // ─── catalog ─────────────────────────────────────────────────────────────────
@@ -179,6 +194,166 @@ export const CATALOG: ModelEntry[] = [
       ],
     },
     cost: { type: 'per-token', inputPerM: 0.5, outputPerM: 3.0 },
+  },
+
+  // ── BFL (AI Gateway) ───────────────────────────────────────────────────
+  {
+    id: 'flux-kontext-max',
+    name: 'FLUX Kontext Max',
+    released: '2025-06-12',
+    ...bflImage,
+    cost: { type: 'per-image', perImage: 0.08 },
+    features: {
+      editing: true,
+      inpainting: false,
+      aspectRatios: fluxAspectRatios,
+      seed: true,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'flux-kontext-pro',
+    name: 'FLUX Kontext Pro',
+    released: '2025-06-12',
+    ...bflImage,
+    cost: { type: 'per-image', perImage: 0.04 },
+    features: {
+      editing: true,
+      inpainting: false,
+      aspectRatios: fluxAspectRatios,
+      seed: true,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'flux-pro-1.0-fill',
+    name: 'FLUX Pro 1.0 Fill',
+    released: '2024-10-15',
+    ...bflImage,
+    cost: { type: 'per-image', perImage: 0.05 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: fluxAspectRatios,
+      seed: true,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'flux-pro-1.1',
+    name: 'FLUX Pro 1.1',
+    released: '2024-10-01',
+    ...bflImage,
+    cost: { type: 'per-image', perImage: 0.04 },
+    features: {
+      editing: false,
+      inpainting: false,
+      aspectRatios: fluxAspectRatios,
+      seed: true,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'flux-pro-1.1-ultra',
+    name: 'FLUX Pro 1.1 Ultra',
+    released: '2024-11-06',
+    ...bflImage,
+    cost: { type: 'per-image', perImage: 0.06 },
+    features: {
+      editing: false,
+      inpainting: false,
+      aspectRatios: fluxAspectRatios,
+      seed: true,
+      multipleImages: false,
+    },
+  },
+
+  // ── Recraft (AI Gateway) ───────────────────────────────────────────────
+  {
+    id: 'recraft-v2',
+    name: 'Recraft v2',
+    released: '2024-08-19',
+    ...recraftImage,
+    cost: { type: 'per-image', perImage: 0.04 },
+    features: {
+      editing: false,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+      seed: false,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'recraft-v3',
+    name: 'Recraft v3 (AI Gateway)',
+    released: '2024-10-29',
+    ...recraftImage,
+    cost: { type: 'per-image', perImage: 0.04 },
+    features: {
+      editing: false,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+      seed: false,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'recraft-v4',
+    name: 'Recraft v4',
+    released: '2025-10-08',
+    ...recraftImage,
+    cost: { type: 'per-image', perImage: 0.04 },
+    features: {
+      editing: false,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+      seed: false,
+      multipleImages: false,
+    },
+  },
+  {
+    id: 'recraft-v4-pro',
+    name: 'Recraft v4 Pro',
+    released: '2025-10-08',
+    ...recraftImage,
+    cost: { type: 'per-image', perImage: 0.25 },
+    features: {
+      editing: false,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+      seed: false,
+      multipleImages: false,
+    },
+  },
+
+  // ── xAI (AI Gateway) ────────────────────────────────────────────────────
+  {
+    id: 'grok-imagine-image',
+    name: 'Grok Imagine Image',
+    released: '2026-03',
+    ...xaiImage,
+    cost: { type: 'per-image', perImage: 0.02 },
+    features: {
+      editing: true,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
+  {
+    id: 'grok-imagine-image-pro',
+    name: 'Grok Imagine Image Pro',
+    released: '2026-03',
+    ...xaiImage,
+    cost: { type: 'per-image', perImage: 0.07 },
+    features: {
+      editing: true,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+      seed: false,
+      multipleImages: true,
+    },
   },
 
   // ── OpenAI ─────────────────────────────────────────────────────────────

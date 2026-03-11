@@ -86,24 +86,42 @@ export async function subscribeInteractive(): Promise<void> {
     process.exit(0)
   }
 
-  // Get email
-  const email = await text({
-    message: 'Email for the subscription',
-    placeholder: 'you@example.com',
-    validate: (value) => {
-      if (!value || !value.includes('@')) {
-        return 'Please enter a valid email'
-      }
-    },
+  // Optional email prefill for checkout
+  const prefillEmail = await confirm({
+    message: 'Prefill your email in checkout URL? (optional)',
   })
 
-  if (isCancel(email)) {
+  if (isCancel(prefillEmail)) {
     cancel('Subscribe cancelled.')
     process.exit(0)
   }
 
+  let email: string | undefined
+  if (prefillEmail) {
+    const enteredEmail = await text({
+      message: 'Email for the subscription',
+      placeholder: 'you@example.com',
+      validate: (value) => {
+        if (!value || !value.includes('@')) {
+          return 'Please enter a valid email'
+        }
+      },
+    })
+
+    if (isCancel(enteredEmail)) {
+      cancel('Subscribe cancelled.')
+      process.exit(0)
+    }
+
+    email = enteredEmail
+  }
+
   // Show checkout URL
-  const checkoutUrl = `${GATEWAY_BASE}/buy?plan=${planId}&email=${encodeURIComponent(email)}`
+  const params = new URLSearchParams({ plan: planId })
+  if (email) {
+    params.set('email', email)
+  }
+  const checkoutUrl = `${GATEWAY_BASE}/buy?${params.toString()}`
 
   log.info('')
   note(
@@ -176,7 +194,8 @@ export function subscribeNonInteractive(email?: string, plan?: string): void {
   }
 
   console.log('')
-  console.log('After payment, you\'ll receive your API key via email.')
+  console.log('After payment, your API key is shown on the success page.')
+  console.log('If an email was provided to Stripe checkout, a copy is also sent by email.')
   console.log(`Then run: ${pc.cyan('egaki login --provider egaki --key egaki_...')}`)
   console.log('')
   console.log('Tip: egaki supports both BYOK and subscription mode.')

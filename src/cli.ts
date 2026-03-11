@@ -131,13 +131,13 @@ cli
       Egaki subscription avoids managing one key per provider.
       Three plans: Starter ($9/mo, 100 credits), Pro ($29/mo, 500 credits),
       Unlimited ($99/mo, 2000 credits). One credit ≈ one standard image.
-      Interactive mode: pick a plan, enter email, get checkout URL.
-      Non-interactive: pass --email to get the checkout URL directly.
+      Interactive mode: pick a plan and get a checkout URL (email prefill optional).
+      Non-interactive: --email is optional and only pre-fills checkout.
     `,
   )
   .option(
     '-e, --email [email]',
-    z.string().describe('Email for the subscription (skips interactive prompt)'),
+    z.string().describe('Optional email prefill for checkout (skips interactive prompt)'),
   )
   .option(
     '--plan [plan]',
@@ -147,6 +147,8 @@ cli
   .example('egaki subscribe')
   .example('# Non-interactive (for agents)')
   .example('egaki subscribe --email user@example.com --plan pro')
+  .example('# Non-interactive without email prefill')
+  .example('egaki subscribe --plan pro')
   .action(async (options) => {
     const isTTY = process.stdout.isTTY && process.stdin.isTTY
     if (!isTTY || options.email || options.plan) {

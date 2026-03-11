@@ -72,6 +72,13 @@ GET https://ai-gateway.vercel.sh/v1/models
 No auth required. Returns JSON with all available models, capabilities, and pricing.
 Use this to discover new models and update `src/model-catalog.ts`.
 
+When updating model support in the CLI, always:
+
+1. Check `https://ai-gateway.vercel.sh/v1/models` for new model IDs.
+2. Add missing image-capable models to `src/model-catalog.ts`.
+3. If `/v1/models` lacks per-image pricing, source price from provider docs and
+   record it manually in the catalog.
+
 **Current limitation (as of Feb 2026):** Pure image models (`type: "image"`) return
 `"input": "0", "output": "0"` — the actual per-image cost is NOT in the API response.
 Only per-token pricing for language models is accurate. Per-image costs must be sourced

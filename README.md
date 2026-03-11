@@ -125,6 +125,9 @@ Quick rule of thumb for flags:
 - **Google Imagen (`imagen-*`)**: supports `--seed`, `--aspect-ratio`, `--input`, `--mask`, `-n`
 - **Google Gemini image models**: supports `--input`, `--aspect-ratio`, `--image-size`; usually no `--seed`
 - **OpenAI image models**: strong editing and inpainting; size controls are model-specific
+- **BFL image models (`flux-*`)**: Kontext/Pro variants via AI Gateway subscription
+- **Recraft models (`recraft-*`)**: v2/v3/v4 families available via AI Gateway subscription
+- **xAI image models (`grok-imagine-*`)**: Grok image generation via AI Gateway subscription
 - **Flux/Fal/Replicate models**: broad aspect-ratio + seed support; editing/inpainting depends on exact model
 
 ### Subscription and usage
@@ -134,9 +137,14 @@ egaki supports **both** authentication modes:
 - **BYOK (bring your own keys):** add provider keys with `egaki login` per provider.
 - **Egaki subscription:** use one `egaki_...` key to access all supported models without managing keys for each provider.
 
+`--email` on `subscribe` is optional. It only pre-fills Stripe checkout email.
+
 ```bash
 # Subscribe and get a checkout URL
 egaki subscribe --email user@example.com --plan pro
+
+# Subscribe without email prefill
+egaki subscribe --plan pro
 
 # Save your Egaki key after checkout
 egaki login --provider egaki --key egaki_...

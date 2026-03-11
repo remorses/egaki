@@ -355,9 +355,12 @@ app.get('/success', async (c) => {
   const message = canceled
     ? 'No charge was made. You can return anytime to subscribe.'
     : apiKey
-      ? 'Run this on any machine to start generating images with egaki.'
+      ? 'Run this command on the machine where you use egaki to store your credentials locally.'
       : 'Your payment is confirmed. This page will update once the API key is ready.'
   const command = apiKey ? `egaki login --provider egaki --key ${apiKey}` : null
+  const maskedCommand = command
+    ? command.replace(/egaki_[a-z0-9]+/i, 'egaki_********************************')
+    : null
 
   const html = `<!DOCTYPE html>
 <html>
@@ -366,12 +369,20 @@ app.get('/success', async (c) => {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${canceled ? 'Checkout canceled' : 'Egaki subscription'}</title>
   <style>
-    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: #0f1419; color: #e6edf3; margin: 0; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: radial-gradient(circle at 10% 0%, #1b2430 0%, #0f1419 48%); color: #e6edf3; margin: 0; }
     .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 32px; }
-    .card { max-width: 560px; width: 100%; background: #151b23; border: 1px solid #2d3440; border-radius: 16px; padding: 28px; }
+    .card { max-width: 680px; width: 100%; background: #151b23; border: 1px solid #2d3440; border-radius: 16px; padding: 28px; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.35); }
     h1 { font-size: 24px; margin: 0 0 12px; }
-    p { color: #9aa4b2; margin: 0 0 20px; line-height: 1.5; }
-    .key { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #0b1117; border: 1px solid #2d3440; padding: 12px 14px; border-radius: 10px; word-break: break-all; }
+    p { color: #9aa4b2; margin: 0 0 16px; line-height: 1.55; }
+    .command-wrap { margin-top: 10px; }
+    .command { display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: #0b1117; border: 1px solid #2d3440; padding: 12px 14px; border-radius: 10px; word-break: break-all; white-space: pre-wrap; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .btn { appearance: none; border: 1px solid #2d3440; background: #1f2937; color: #e6edf3; border-radius: 10px; padding: 9px 12px; font-size: 14px; cursor: pointer; }
+    .btn:hover { background: #243244; }
+    .btn.primary { background: #1d4ed8; border-color: #1d4ed8; }
+    .btn.primary:hover { background: #1e40af; }
+    .hint { margin-top: 10px; color: #8fa1b3; font-size: 14px; }
+    .copy-status { margin-top: 8px; font-size: 13px; color: #7dd3fc; min-height: 1.2em; }
     .status { margin-top: 16px; font-size: 14px; color: #6b7280; }
   </style>
 </head>
@@ -380,10 +391,70 @@ app.get('/success', async (c) => {
     <div class="card">
       <h1>${headline}</h1>
       <p>${message}</p>
-      ${command ? `<div class="key">${command}</div>` : ''}
+      ${command
+        ? `<div class="command-wrap">
+        <code class="command" id="login-command">${maskedCommand}</code>
+        <div class="actions">
+          <button type="button" class="btn" id="toggle-secret">Show key</button>
+          <button type="button" class="btn primary" id="copy-command">Copy command</button>
+        </div>
+        <div class="copy-status" id="copy-status"></div>
+        <p class="hint">Run this once on your machine to store credentials in <code>~/.config/egaki/credentials.json</code>.</p>
+      </div>`
+        : ''}
       ${status ? `<div class="status">Status: ${status}</div>` : ''}
     </div>
   </div>
+  ${command
+    ? `<script>
+    (() => {
+      const fullCommand = ${JSON.stringify(command)};
+      const maskedCommand = ${JSON.stringify(maskedCommand)};
+      const commandEl = document.getElementById('login-command');
+      const toggleBtn = document.getElementById('toggle-secret');
+      const copyBtn = document.getElementById('copy-command');
+      const statusEl = document.getElementById('copy-status');
+      if (!commandEl || !toggleBtn || !copyBtn || !statusEl) return;
+
+      let revealed = false;
+      const render = () => {
+        commandEl.textContent = revealed ? fullCommand : maskedCommand;
+        toggleBtn.textContent = revealed ? 'Hide key' : 'Show key';
+      };
+
+      const copyText = async (text) => {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      };
+
+      toggleBtn.addEventListener('click', () => {
+        revealed = !revealed;
+        render();
+      });
+
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await copyText(fullCommand);
+          statusEl.textContent = 'Copied command to clipboard.';
+        } catch {
+          statusEl.textContent = 'Could not copy automatically. Please copy manually.';
+        }
+      });
+
+      render();
+    })();
+  </script>`
+    : ''}
 </body>
 </html>`
 
