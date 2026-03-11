@@ -1,14 +1,17 @@
 {
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "lib": [
       "ESNext"
     ],
     "target": "ESNext",
     "module": "nodenext",
     "moduleDetection": "force",
-    "allowJs": true,
     "outDir": "dist",
     "rootDir": "src",
+    "declaration": true,
+    "declarationMap": true,
     "useUnknownInCatchVariables": false,
     "moduleResolution": "nodenext",
     "verbatimModuleSyntax": true,

@@ -2,15 +2,43 @@
   "name": "egaki",
   "version": "0.0.1",
   "type": "module",
+  "main": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    },
+    "./src": {
+      "types": "./src/cli.ts",
+      "default": "./src/cli.ts"
+    },
+    "./src/*": {
+      "types": "./src/*.ts",
+      "default": "./src/*.ts"
+    }
+  },
   "description": "AI image and video generation CLI",
-  "bin": "bin.js",
+  "bin": "dist/cli.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/remorses/egaki.git",
+    "directory": "."
+  },
+  "homepage": "https://github.com/remorses/egaki#readme",
+  "bugs": {
+    "url": "https://github.com/remorses/egaki/issues"
+  },
   "files": [
+    "src",
     "dist",
-    "bin.js"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/cli.js",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [
