@@ -16,6 +16,7 @@ import {
   spinner,
 } from '@clack/prompts'
 import { EGAKI_GATEWAY_URL, saveProviderKey, getProviderKey } from './credentials.js'
+import { openUrlInBrowser } from './open-browser.js'
 
 // Strip /v1/ai suffix to get the base URL for non-proxy endpoints (/buy, /api/*)
 const GATEWAY_BASE = EGAKI_GATEWAY_URL.replace(/\/v1\/ai$/, '')
@@ -137,6 +138,16 @@ export async function subscribeInteractive(): Promise<void> {
     ].join('\n'),
     'Checkout',
   )
+
+  const canAutoOpen = process.stdout.isTTY && process.stdin.isTTY
+  if (canAutoOpen) {
+    const opened = openUrlInBrowser(checkoutUrl)
+    if (opened) {
+      log.success('Opened checkout URL in your browser')
+    } else {
+      log.info('Could not auto-open a browser. Open the URL above manually.')
+    }
+  }
 
   // Ask if they want to enter the key now
   const hasKey = await confirm({
