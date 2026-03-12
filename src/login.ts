@@ -1,6 +1,7 @@
 // Login command — interactive and non-interactive API key management.
 // Interactive mode uses clack prompts for provider selection and key input.
 // Non-interactive mode supports --provider + --key flags and stdin piping.
+// Antigravity provider uses browser OAuth instead of a pasted key.
 import {
   intro,
   outro,
@@ -17,8 +18,10 @@ import {
   saveProviderKey,
   removeProviderKey,
   getKeyStatus,
-  readCredentials,
+  saveAntigravityAuth,
+  getAntigravityAuth,
 } from './credentials.js'
+import { antigravityOAuthFromCallbackUrl, antigravityOAuthLogin } from './antigravity-auth.js'
 
 export async function loginInteractive(): Promise<void> {
   intro(pc.bold('egaki login'))
@@ -31,6 +34,10 @@ export async function loginInteractive(): Promise<void> {
       }
       if (status.source === 'stored') {
         return pc.green('(saved)')
+      }
+      if (status.source === 'oauth') {
+        const auth = getAntigravityAuth()
+        return pc.green(`(signed in${auth?.email ? ` as ${auth.email}` : ''})`)
       }
       return pc.dim('(not configured)')
     })()
@@ -59,6 +66,13 @@ export async function loginInteractive(): Promise<void> {
   if (!info) {
     log.error(`Unknown provider: ${provider}`)
     process.exit(1)
+  }
+
+  if (provider === 'antigravity') {
+    const auth = await antigravityOAuthLogin()
+    saveAntigravityAuth(auth)
+    outro('Done - Antigravity OAuth saved')
+    return
   }
 
   log.info(
@@ -91,13 +105,15 @@ export async function loginInteractive(): Promise<void> {
   outro('Done')
 }
 
-export function loginNonInteractive({
+export async function loginNonInteractive({
   provider,
   key,
+  callbackUrl,
 }: {
   provider: string
-  key: string
-}): void {
+  key?: string
+  callbackUrl?: string
+}): Promise<void> {
   const info = PROVIDERS[provider]
   if (!info) {
     const available = Object.keys(PROVIDERS).join(', ')
@@ -105,6 +121,15 @@ export function loginNonInteractive({
       pc.red(`Unknown provider: ${provider}. Available: ${available}`),
     )
     process.exit(1)
+  }
+
+  if (provider === 'antigravity') {
+    const auth = callbackUrl
+      ? await antigravityOAuthFromCallbackUrl(callbackUrl)
+      : await antigravityOAuthLogin()
+    saveAntigravityAuth(auth)
+    console.log(pc.green('Antigravity OAuth saved'))
+    return
   }
 
   if (!key || key.trim().length === 0) {
@@ -121,6 +146,27 @@ export function showLoginStatus(): void {
 
   for (const [key, info] of Object.entries(PROVIDERS)) {
     const status = getKeyStatus(key)
+
+    if (key === 'antigravity') {
+      const auth = getAntigravityAuth()
+      if (!auth) {
+        console.log(`${pc.dim('-')} ${info.label} ${pc.dim('(not signed in)')}`)
+        console.log(pc.dim('  run: egaki login --provider antigravity'))
+      } else {
+        const expired = auth.expires < Date.now()
+        const expiryLabel = expired ? pc.yellow('(token expired)') : pc.dim('(token valid)')
+        console.log(`${pc.green('*')} ${info.label} ${pc.green('(signed in)')}`)
+        if (auth.email) {
+          console.log(pc.dim(`  account: ${auth.email}`))
+        }
+        if (auth.projectId) {
+          console.log(pc.dim(`  project: ${auth.projectId}`))
+        }
+        console.log(`  ${expiryLabel}`)
+      }
+      continue
+    }
+
     const icon = status.available ? pc.green('*') : pc.dim('-')
     const source = (() => {
       if (status.source === 'env') {
@@ -128,6 +174,9 @@ export function showLoginStatus(): void {
       }
       if (status.source === 'stored') {
         return pc.green('(saved)')
+      }
+      if (status.source === 'oauth') {
+        return pc.green('(signed in)')
       }
       return pc.dim('(not set)')
     })()
@@ -150,7 +199,7 @@ export function removeLogin(provider: string): void {
   }
 
   removeProviderKey(provider)
-  console.log(pc.green(`${info.label} key removed`))
+  console.log(pc.green(`${provider === 'antigravity' ? 'Antigravity OAuth' : info.label} key removed`))
 }
 
 // Read API key from stdin (for piping: echo "sk-xxx" | egaki login --provider google)

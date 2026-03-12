@@ -130,6 +130,23 @@ Quick rule of thumb for flags:
 - **xAI image models (`grok-imagine-*`)**: Grok image generation via AI Gateway subscription
 - **Flux/Fal/Replicate models**: broad aspect-ratio + seed support; editing/inpainting depends on exact model
 
+### Antigravity support matrix
+
+Current status for OAuth-based Antigravity usage in `egaki`:
+
+| Capability | Status | Notes |
+| --- | --- | --- |
+| `egaki login --provider antigravity` | Supported | Browser OAuth + callback URL completion supported |
+| `-m antigravity-gemini-3-pro-image` | Per-user gated | Availability depends on the signed-in Google account + Cloud project state (verification/API access). One account failing does not mean all accounts fail. |
+| Nano Banana via Antigravity (`gemini-2.5-flash-image`) | Not supported | Use direct Google model path instead |
+
+OAuth setup note:
+
+```bash
+export ANTIGRAVITY_OAUTH_CLIENT_ID="your-google-oauth-client-id"
+export ANTIGRAVITY_OAUTH_CLIENT_SECRET="your-google-oauth-client-secret"
+```
+
 ### Subscription and usage
 
 egaki supports **both** authentication modes:
