@@ -196,6 +196,26 @@ export const CATALOG: ModelEntry[] = [
     cost: { type: 'per-token', inputPerM: 0.5, outputPerM: 3.0 },
   },
 
+  // ── Antigravity (Google OAuth via Cloud Code) ───────────────────────────
+  {
+    id: 'antigravity-gemini-3-pro-image',
+    name: 'Antigravity Gemini 3 Pro Image',
+    description:
+      'Image generation through Antigravity OAuth. Availability is account/project dependent ' +
+      'and may require Google account verification plus Gemini for Google Cloud API access.',
+    released: '2026-03',
+    provider: 'antigravity',
+    strategy: 'text',
+    features: {
+      editing: true,
+      inpainting: false,
+      aspectRatios: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+      seed: false,
+      multipleImages: true,
+    },
+    cost: { type: 'per-token', inputPerM: 1.25, outputPerM: 10 },
+  },
+
   // ── BFL (AI Gateway) ───────────────────────────────────────────────────
   {
     id: 'flux-kontext-max',

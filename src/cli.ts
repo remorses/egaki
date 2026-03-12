@@ -15,7 +15,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import pc from 'picocolors'
 import pkg from '../package.json' with { type: 'json' }
-import { injectCredentialsToEnv, PROVIDERS } from './credentials.js'
+import {
+  injectCredentialsToEnv,
+  PROVIDERS,
+} from './credentials.js'
 import {
   IMAGE_MODELS,
   DEFAULT_MODEL,
@@ -31,6 +34,7 @@ import {
   removeLogin,
   readKeyFromStdin,
 } from './login.js'
+import { generateWithAntigravityModel } from './antigravity-image.js'
 import {
   subscribeInteractive,
   subscribeNonInteractive,
@@ -82,6 +86,12 @@ cli
     '-k, --key [key]',
     z.string().describe('API key value for non-interactive login'),
   )
+  .option(
+    '--callback-url [url]',
+    z
+      .string()
+      .describe('OAuth callback URL to finish browser login for OAuth providers (e.g. antigravity)'),
+  )
   .option('--show', 'Show which providers are configured and their status')
   .option(
     '--remove [provider]',
@@ -93,6 +103,8 @@ cli
   .example('egaki login --provider google --key AIza...')
   .example('# Pipe key from stdin (useful in CI/scripts)')
   .example('echo "AIza..." | egaki login --provider google')
+  .example('# Finish Antigravity OAuth from shared callback URL')
+  .example('egaki login --provider antigravity --callback-url "localhost:51121/oauth-callback?..."')
   .example('# Show configured providers')
   .example('egaki login --show')
   .example('# Remove a stored key')
@@ -110,8 +122,15 @@ cli
 
     // Non-interactive: --provider + --key or stdin
     if (options.provider) {
-      const key = options.key || (await readKeyFromStdin())
-      loginNonInteractive({ provider: options.provider, key })
+      const providerInfo = PROVIDERS[options.provider]
+      const key = providerInfo?.oauth
+        ? options.key
+        : (options.key || (await readKeyFromStdin()))
+      await loginNonInteractive({
+        provider: options.provider,
+        key,
+        callbackUrl: options.callbackUrl,
+      })
       return
     }
 
@@ -291,13 +310,12 @@ cli
     if (!options.stdout) {
       console.error(pc.dim(`Model: ${model}`))
       console.error(pc.dim(`Prompt: ${prompt}`))
-      console.error(
-        pc.dim(
-          config.strategy === 'image'
+      const mode = config.provider === 'antigravity'
+        ? 'Mode: Antigravity API (OAuth)'
+        : (config.strategy === 'image'
             ? 'Mode: Image API (generateImage)'
-            : 'Mode: Text+Image (generateText)',
-        ),
-      )
+            : 'Mode: Text+Image (generateText)')
+      console.error(pc.dim(mode))
     }
 
     const inputImages = await readInputImages(options.input)
@@ -305,7 +323,18 @@ cli
       ? await readInputSource(options.mask)
       : undefined
 
-    if (config.strategy === 'image') {
+    if (config.provider === 'antigravity') {
+      await generateWithAntigravityModel({
+        prompt,
+        model,
+        outputPath,
+        inputImages,
+        aspectRatio: options.aspectRatio,
+        count: options.count,
+        json: options.json || false,
+        stdout: options.stdout || false,
+      })
+    } else if (config.strategy === 'image') {
       await generateWithImageModel({
         prompt,
         model,

@@ -4,18 +4,29 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import type { AntigravityAuth } from './antigravity-auth.js'
+
+export type ProviderInfo = {
+  envVar: string
+  label: string
+  hint: string
+  oauth?: boolean
+}
 
 // Maps provider names to their expected env var names.
 // When a key is stored, we set the corresponding env var before
 // calling the AI SDK so the provider picks it up automatically.
-export const PROVIDERS: Record<
-  string,
-  { envVar: string; label: string; hint: string }
-> = {
+export const PROVIDERS: Record<string, ProviderInfo> = {
   egaki: {
     envVar: 'EGAKI_API_KEY',
     label: 'Egaki (all models, one subscription)',
     hint: 'Subscribe at https://egaki.org/buy or run: egaki subscribe',
+  },
+  antigravity: {
+    envVar: 'ANTIGRAVITY_ACCESS_TOKEN',
+    label: 'Antigravity (Google OAuth)',
+    hint: 'Sign in with your Google account via browser OAuth',
+    oauth: true,
   },
   google: {
     envVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -52,7 +63,8 @@ function getCredentialsPath(): string {
   return path.join(getConfigDir(), 'credentials.json')
 }
 
-export type Credentials = Record<string, string>
+export type CredentialValue = string | AntigravityAuth
+export type Credentials = Record<string, CredentialValue>
 
 export function readCredentials(): Credentials {
   const filePath = getCredentialsPath()
@@ -78,6 +90,21 @@ export function saveProviderKey(provider: string, key: string): void {
   writeCredentials(creds)
 }
 
+export function saveAntigravityAuth(auth: AntigravityAuth): void {
+  const creds = readCredentials()
+  creds['antigravity'] = auth
+  writeCredentials(creds)
+}
+
+export function getAntigravityAuth(): AntigravityAuth | undefined {
+  const creds = readCredentials()
+  const val = creds['antigravity']
+  if (val && typeof val === 'object' && 'refresh' in val && 'access' in val) {
+    return val as AntigravityAuth
+  }
+  return undefined
+}
+
 export function removeProviderKey(provider: string): void {
   const creds = readCredentials()
   delete creds[provider]
@@ -86,7 +113,8 @@ export function removeProviderKey(provider: string): void {
 
 export function getProviderKey(provider: string): string | undefined {
   const creds = readCredentials()
-  return creds[provider]
+  const val = creds[provider]
+  return typeof val === 'string' ? val : undefined
 }
 
 // Inject all stored credentials as env vars so the AI SDK
@@ -94,13 +122,16 @@ export function getProviderKey(provider: string): string | undefined {
 // by the user take precedence (we don't overwrite them).
 export function injectCredentialsToEnv(): void {
   const creds = readCredentials()
-  for (const [provider, key] of Object.entries(creds)) {
+  for (const [provider, value] of Object.entries(creds)) {
     const info = PROVIDERS[provider]
     if (!info) {
       continue
     }
-    if (!process.env[info.envVar]) {
-      process.env[info.envVar] = key
+    if (provider === 'antigravity') {
+      continue
+    }
+    if (typeof value === 'string' && !process.env[info.envVar]) {
+      process.env[info.envVar] = value
     }
   }
 }
@@ -109,12 +140,21 @@ export function injectCredentialsToEnv(): void {
 // Returns the source of the key for display purposes.
 export function getKeyStatus(provider: string): {
   available: boolean
-  source: 'env' | 'stored' | 'none'
+  source: 'env' | 'stored' | 'oauth' | 'none'
 } {
   const info = PROVIDERS[provider]
   if (!info) {
     return { available: false, source: 'none' }
   }
+
+  if (provider === 'antigravity') {
+    const auth = getAntigravityAuth()
+    if (auth) {
+      return { available: true, source: 'oauth' }
+    }
+    return { available: false, source: 'none' }
+  }
+
   if (process.env[info.envVar]) {
     return { available: true, source: 'env' }
   }
