@@ -10,8 +10,8 @@ import path from 'node:path'
 import { log, note, spinner } from '@clack/prompts'
 import pc from 'picocolors'
 
-const ANTIGRAVITY_CLIENT_ID = process.env['ANTIGRAVITY_OAUTH_CLIENT_ID']
-const ANTIGRAVITY_CLIENT_SECRET = process.env['ANTIGRAVITY_OAUTH_CLIENT_SECRET']
+const ANTIGRAVITY_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com'
+const ANTIGRAVITY_CLIENT_SECRET = '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'
 const ANTIGRAVITY_REDIRECT_URI = 'http://localhost:51121/oauth-callback'
 const ANTIGRAVITY_PORT = 51121
 
@@ -82,20 +82,6 @@ type PendingOAuthStore = Record<string, { verifier: string; createdAt: number }>
 
 const PENDING_STATE_TTL_MS = 30 * 60 * 1000
 const ANTIGRAVITY_DEFAULT_PROJECT_ID = 'rising-fact-p41fc'
-
-function requireOAuthClientId(): string {
-  if (ANTIGRAVITY_CLIENT_ID) {
-    return ANTIGRAVITY_CLIENT_ID
-  }
-  throw new Error('Missing ANTIGRAVITY_OAUTH_CLIENT_ID env var')
-}
-
-function requireOAuthClientSecret(): string {
-  if (ANTIGRAVITY_CLIENT_SECRET) {
-    return ANTIGRAVITY_CLIENT_SECRET
-  }
-  throw new Error('Missing ANTIGRAVITY_OAUTH_CLIENT_SECRET env var')
-}
 
 function getConfigDir(): string {
   const xdg = process.env['XDG_CONFIG_HOME']
@@ -169,7 +155,7 @@ function generateState(): string {
 
 function buildAuthorizeUrl({ challenge, state }: { challenge: string; state: string }): string {
   const params = new URLSearchParams({
-    client_id: requireOAuthClientId(),
+    client_id: ANTIGRAVITY_CLIENT_ID,
     response_type: 'code',
     redirect_uri: ANTIGRAVITY_REDIRECT_URI,
     scope: ANTIGRAVITY_SCOPES.join(' '),
@@ -190,8 +176,8 @@ async function exchangeCodeForTokens({ code, verifier }: { code: string; verifie
       'User-Agent': GEMINI_CLI_USER_AGENT,
     },
     body: new URLSearchParams({
-      client_id: requireOAuthClientId(),
-      client_secret: requireOAuthClientSecret(),
+      client_id: ANTIGRAVITY_CLIENT_ID,
+      client_secret: ANTIGRAVITY_CLIENT_SECRET,
       code,
       grant_type: 'authorization_code',
       redirect_uri: ANTIGRAVITY_REDIRECT_URI,
@@ -390,8 +376,8 @@ export async function refreshAntigravityToken(auth: AntigravityAuth): Promise<An
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
-        client_id: requireOAuthClientId(),
-        client_secret: requireOAuthClientSecret(),
+        client_id: ANTIGRAVITY_CLIENT_ID,
+        client_secret: ANTIGRAVITY_CLIENT_SECRET,
       }).toString(),
     })
 

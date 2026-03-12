@@ -140,13 +140,6 @@ Current status for OAuth-based Antigravity usage in `egaki`:
 | `-m antigravity-gemini-3-pro-image` | Per-user gated | Availability depends on the signed-in Google account + Cloud project state (verification/API access). One account failing does not mean all accounts fail. |
 | Nano Banana via Antigravity (`gemini-2.5-flash-image`) | Not supported | Use direct Google model path instead |
 
-OAuth setup note:
-
-```bash
-export ANTIGRAVITY_OAUTH_CLIENT_ID="your-google-oauth-client-id"
-export ANTIGRAVITY_OAUTH_CLIENT_SECRET="your-google-oauth-client-secret"
-```
-
 ### Subscription and usage
 
 egaki supports **both** authentication modes:
