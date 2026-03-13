@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.0
+
+1. **New `egaki video` command** — generate videos from text prompts or still images.
+   Full support for all AI Gateway video providers:
+
+   ```bash
+   egaki video "a paper boat drifting on a calm lake at sunrise" -o boat.mp4
+   egaki video "timelapse of a stormy sea" -m google/veo-3.1-generate-001 --duration 8 -o storm.mp4
+   egaki video "animate the clouds slowly" --input photo.jpg -m klingai/kling-v2.6-i2v -o animated.mp4
+   ```
+
+   Supported models: Google Veo 3.0/3.1, Kling v2.5/v2.6/v3.0, Bytedance Seedance,
+   Alibaba Wan, xAI Grok video.
+
+2. **Full video options** — `--duration`, `--resolution`, `--aspect-ratio`, `--fps`,
+   `--seed`, `--count`, `--input` (image-to-video), `--stdout`, `--json`.
+
+3. **`egaki models --type` filter** — filter model listing by modality:
+
+   ```bash
+   egaki models --type video
+   egaki models --type image
+   egaki models --type all   # default
+   ```
+
+   Video models show duration range, capabilities (t2v, i2v, r2v), and resolution tiers.
+
+4. **Egaki subscription covers video** — all gateway video models work with your
+   `egaki_...` key; usage is billed per-second based on model, resolution, and duration.
+
 ## 0.1.0
 
 1. **New `egaki video` command** — generate videos from text prompts using AI models
