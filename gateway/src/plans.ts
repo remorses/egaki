@@ -10,6 +10,7 @@
 // rotate them or switch Stripe accounts without redeploying code.
 
 import { CATALOG, type ModelEntry } from '../../src/model-catalog.js'
+import { VIDEO_CATALOG, type VideoModelEntry } from '../../src/video-model-catalog.js'
 
 
 export type PlanId = 'plus' | 'pro'
@@ -104,20 +105,113 @@ const MODEL_COSTS = new Map<string, number>(
   CATALOG.map((m) => [m.id, estimatePerImageCost(m)]),
 )
 
+const VIDEO_MODEL_COSTS = new Map<string, VideoModelEntry>(
+  VIDEO_CATALOG.map((m) => [m.id, m]),
+)
+
 const DEFAULT_MODEL_COST = 0.04
+const DEFAULT_VIDEO_COST_PER_SECOND = 0.1
+const DEFAULT_VIDEO_DURATION_SEC = 5
+
+function normalizeModelId(modelId: string): string {
+  if (MODEL_COSTS.has(modelId) || VIDEO_MODEL_COSTS.has(modelId)) {
+    return modelId
+  }
+  const slash = modelId.indexOf('/')
+  if (slash === -1) {
+    return modelId
+  }
+  const withoutProviderPrefix = modelId.slice(slash + 1)
+  return withoutProviderPrefix
+}
+
+function normalizeResolution(resolution?: string): string | undefined {
+  if (!resolution) return undefined
+  const normalized = resolution.trim().toLowerCase()
+  if (normalized === '1920x1080') return '1080p'
+  if (normalized === '1280x720') return '720p'
+  if (normalized === '854x480' || normalized === '848x480') return '480p'
+  return normalized
+}
+
+function getVideoPerSecondProviderCost(
+  model: VideoModelEntry,
+  params: { resolution?: string; mode?: string; audio?: boolean },
+): number {
+  if (model.cost.type !== 'per-video-second') {
+    return DEFAULT_VIDEO_COST_PER_SECOND
+  }
+
+  const resolution = normalizeResolution(params.resolution)
+
+  const exact = model.cost.tiers.find((tier) => {
+    if (tier.resolution && normalizeResolution(tier.resolution) !== resolution) return false
+    if (tier.mode && tier.mode !== params.mode) return false
+    if (tier.audio != null && tier.audio !== params.audio) return false
+    return true
+  })
+  if (exact) {
+    return exact.costPerSecond
+  }
+
+  const resolutionOnly = model.cost.tiers.filter((tier) => {
+    return tier.resolution != null && normalizeResolution(tier.resolution) === resolution
+  })
+  if (resolutionOnly.length > 0) {
+    return Math.max(...resolutionOnly.map((tier) => tier.costPerSecond))
+  }
+
+  // Conservative fallback when request does not include enough metadata to select
+  // a specific tier (e.g. opaque providerOptions): charge the highest known tier.
+  const maxTier = Math.max(...model.cost.tiers.map((tier) => tier.costPerSecond))
+  return Number.isFinite(maxTier) ? maxTier : DEFAULT_VIDEO_COST_PER_SECOND
+}
 
 /**
  * Get the marked-up cost for a single image generation with the given model.
  * Returns the dollar amount the user will be "charged" against their spending cap.
  */
 export function getModelUserCost(modelId: string): number {
-  const baseCost = MODEL_COSTS.get(modelId) ?? DEFAULT_MODEL_COST
+  const normalizedModelId = normalizeModelId(modelId)
+  const baseCost = MODEL_COSTS.get(normalizedModelId) ?? DEFAULT_MODEL_COST
   return baseCost * MARKUP_MULTIPLIER
+}
+
+/**
+ * Get the marked-up cost for a single video generation request.
+ */
+export function getVideoUserCost(
+  modelId: string,
+  params: {
+    count: number
+    durationSec?: number
+    resolution?: string
+    mode?: string
+    audio?: boolean
+  },
+): number {
+  const normalizedModelId = normalizeModelId(modelId)
+  const model = VIDEO_MODEL_COSTS.get(normalizedModelId)
+
+  const durationSec = params.durationSec ??
+    (model?.cost.type === 'per-video-second' ? model.cost.defaultDurationSec : DEFAULT_VIDEO_DURATION_SEC)
+
+  const perSecond = model
+    ? getVideoPerSecondProviderCost(model, {
+        resolution: params.resolution,
+        mode: params.mode,
+        audio: params.audio,
+      })
+    : DEFAULT_VIDEO_COST_PER_SECOND
+
+  const providerCost = perSecond * Math.max(1, durationSec) * Math.max(1, params.count)
+  return providerCost * MARKUP_MULTIPLIER
 }
 
 /**
  * Get the raw provider cost for a model (no markup).
  */
 export function getModelProviderCost(modelId: string): number {
-  return MODEL_COSTS.get(modelId) ?? DEFAULT_MODEL_COST
+  const normalizedModelId = normalizeModelId(modelId)
+  return MODEL_COSTS.get(normalizedModelId) ?? DEFAULT_MODEL_COST
 }

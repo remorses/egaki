@@ -1,9 +1,10 @@
 # egaki
 
-Generate AI images from the terminal with one command.
+Generate AI images and videos from the terminal with one command.
 
 `egaki` is a TypeScript CLI built on the Vercel AI SDK and goke. It supports
-Google Imagen, Gemini image-capable models, and model discovery with pricing.
+Google Imagen, Gemini image-capable models, video generation (Veo, Kling, Wan,
+Bytedance Seedance, xAI Grok), and model discovery with pricing.
 
 ## Install
 
@@ -16,18 +17,19 @@ pnpm add -g egaki
 ```bash
 egaki login
 egaki image "a watercolor fox reading a map" -o fox.png
+egaki video "a paper boat drifting on a calm lake at sunrise" -o boat.mp4
 ```
 
 ## CLI examples
 
-### Generate from text
+### Generate an image from text
 
 ```bash
 egaki image "cinematic mountain village at sunrise" -o village.png
 egaki image "isometric floating city, detailed, soft colors" -m imagen-4.0-generate-001
 ```
 
-### Edit with input image
+### Edit with an input image
 
 ```bash
 egaki image "add a red scarf and make it winter" --input portrait.jpg -o portrait-winter.png
@@ -53,21 +55,74 @@ egaki image "cyberpunk alley at night" --aspect-ratio 16:9
 egaki image "polaroid-style travel photo" --aspect-ratio 4:5
 ```
 
-### Pipe output to other tools
+### Pipe image output to other tools
 
 ```bash
 egaki image "flat icon of a fox" --stdout | magick - -resize 512x512 fox-icon.png
 ```
 
+---
+
+### Generate a video from text
+
+```bash
+egaki video "a paper boat drifting on a calm lake at sunrise" -o boat.mp4
+egaki video "timelapse of a stormy sea, cinematic" -m google/veo-3.1-generate-001 --duration 8 -o storm.mp4
+```
+
+### Generate with a cheap model
+
+```bash
+# Kling v2.5 Turbo — fast and inexpensive
+egaki video "a cat walking on a rooftop at night" -m klingai/kling-v2.5-turbo-t2v --duration 5 -o cat.mp4
+```
+
+### Image-to-video
+
+```bash
+# Animate a still image (model must support i2v)
+egaki video "slowly animate the clouds" --input photo.jpg -m klingai/kling-v2.6-i2v -o animated.mp4
+```
+
+### Control resolution and aspect ratio
+
+```bash
+egaki video "aerial drone shot over a city grid" \
+  -m google/veo-3.1-fast-generate-001 \
+  --aspect-ratio 16:9 \
+  --resolution 1080p \
+  --duration 6 \
+  -o city.mp4
+```
+
+### Generate multiple videos
+
+```bash
+egaki video "waves crashing on cliffs at golden hour" -n 2 -o waves.mp4
+# writes waves.mp4 and waves-1.mp4
+```
+
+### Pipe video output to other tools
+
+```bash
+egaki video "looping rain animation" --stdout | ffmpeg -i pipe:0 -vf fps=12 rain.gif
+```
+
+---
+
 ### Discover models and pricing
 
 ```bash
 egaki models
+egaki models --type video
+egaki models --type image
 egaki models --provider google
 egaki models --json
 ```
 
-### Advanced examples
+---
+
+### Advanced image examples
 
 ```bash
 # Deterministic result (models that support seed)
@@ -104,23 +159,29 @@ egaki image "mascot variations, flat vector look" \
 # writes mascot-0.png ... mascot-5.png
 ```
 
-## Model input examples
+## Model quick reference
 
-Use `egaki models --json` to see the full list. These are practical examples of
-which flags pair well with common models:
+### Image models
 
 | Model ID | Best for | Example command |
 | --- | --- | --- |
 | `imagen-4.0-ultra-generate-001` | High-quality prompt-to-image with seed + ratio | `egaki image "luxury perfume ad on marble" -m imagen-4.0-ultra-generate-001 --aspect-ratio 3:4 --seed 7 -o perfume.png` |
 | `gemini-3.1-flash-image-preview` | Fast, cheap text+image edits with wide aspect-ratio support | `egaki image "turn into manga splash page" -m gemini-3.1-flash-image-preview --input portrait.jpg --aspect-ratio 4:1 -o manga-wide.png` |
 | `nano-banana-pro-preview` | Highest-fidelity Google text+image output | `egaki image "fashion editorial, dramatic rim light" -m nano-banana-pro-preview --input model.jpg --image-size 2K -o editorial.png` |
-| `gpt-image-1.5` | OpenAI image generation with strong editing/inpainting support | `egaki image "replace background with neon city" -m gpt-image-1.5 --input product.png --mask bg-mask.png -o product-neon.png` |
-| `black-forest-labs/flux-fill-pro` | Inpainting-focused Flux workflow on Replicate | `egaki image "restore damaged poster corners" -m black-forest-labs/flux-fill-pro --input poster.png --mask corners-mask.png -o restored.png` |
+| `gpt-image-1.5` | OpenAI image generation with strong editing/inpainting | `egaki image "replace background with neon city" -m gpt-image-1.5 --input product.png --mask bg-mask.png -o product-neon.png` |
 | `fal-ai/flux/schnell` | Very fast low-cost ideation batches | `egaki image "logo sketch, geometric fox" -m fal-ai/flux/schnell -n 8 -o fox-logo.png` |
 
-## Feature support by model family
+### Video models
 
-Quick rule of thumb for flags:
+| Model ID | Best for | Example command |
+| --- | --- | --- |
+| `google/veo-3.1-generate-001` | Highest quality video with audio, up to 4K | `egaki video "rainy Tokyo street at night" -m google/veo-3.1-generate-001 --duration 8 -o tokyo.mp4` |
+| `google/veo-3.1-fast-generate-001` | Fast Veo with 720p–4K, good for iteration | `egaki video "abstract paint patterns" -m google/veo-3.1-fast-generate-001 --duration 5 -o paint.mp4` |
+| `klingai/kling-v2.5-turbo-t2v` | Cheap, fast Kling text-to-video | `egaki video "a paper boat on a pond" -m klingai/kling-v2.5-turbo-t2v --duration 5 -o boat.mp4` |
+| `bytedance/seedance-v1.5-pro` | Bytedance, audio support, three resolutions | `egaki video "timelapse of clouds above mountains" -m bytedance/seedance-v1.5-pro -o clouds.mp4` |
+| `xai/grok-imagine-video` | xAI video generation, cheap for short clips | `egaki video "a dog catching a frisbee" -m xai/grok-imagine-video --duration 3 -o dog.mp4` |
+
+## Feature support by model family
 
 - **Google Imagen (`imagen-*`)**: supports `--seed`, `--aspect-ratio`, `--input`, `--mask`, `-n`
 - **Google Gemini image models**: supports `--input`, `--aspect-ratio`, `--image-size`; usually no `--seed`
@@ -128,16 +189,17 @@ Quick rule of thumb for flags:
 - **BFL image models (`flux-*`)**: Kontext/Pro variants via AI Gateway subscription
 - **Recraft models (`recraft-*`)**: v2/v3/v4 families available via AI Gateway subscription
 - **xAI image models (`grok-imagine-*`)**: Grok image generation via AI Gateway subscription
-- **Flux/Fal/Replicate models**: broad aspect-ratio + seed support; editing/inpainting depends on exact model
+- **Google Veo video models**: up to 4K, audio optional, duration 4–8s
+- **Kling video models**: mode (std/pro), audio on v2.6+, image-to-video support
+- **Bytedance Seedance**: 480p–1080p, audio support on v1.5-pro
+- **xAI Grok video**: 480p–720p, short clips (1–15s)
 
-### Subscription and usage
+## Subscription and usage
 
 egaki supports **both** authentication modes:
 
 - **BYOK (bring your own keys):** add provider keys with `egaki login` per provider.
 - **Egaki subscription:** use one `egaki_...` key to access all supported models without managing keys for each provider.
-
-`--email` on `subscribe` is optional. It only pre-fills Stripe checkout email.
 
 ```bash
 # Subscribe and get a checkout URL
@@ -162,12 +224,15 @@ egaki unsubscribe
 ```bash
 egaki --help
 egaki image --help
+egaki video --help
+egaki models --help
 ```
 
 ## Auth and billing
 
 - `egaki login` stores provider keys in `~/.config/egaki/credentials.json`.
 - `egaki subscribe`, `egaki usage`, and `egaki unsubscribe` manage Egaki plans.
+- Video costs are tracked per-second based on model, resolution, and duration.
 
 ## License
 

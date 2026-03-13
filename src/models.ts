@@ -20,15 +20,20 @@ import pc from 'picocolors'
 import { PROVIDERS, EGAKI_GATEWAY_URL } from './credentials.js'
 import { CATALOG, findModel } from './model-catalog.js'
 import type { ModelEntry } from './model-catalog.js'
+import { VIDEO_CATALOG, findVideoModel } from './video-model-catalog.js'
+import type { VideoModelEntry } from './video-model-catalog.js'
 
-export type { ModelEntry }
+export type AnyModelEntry = ModelEntry | VideoModelEntry
+export type { ModelEntry, VideoModelEntry }
 
 export const IMAGE_MODELS = CATALOG.map((m) => m.id) as [string, ...string[]]
+export const VIDEO_MODELS = VIDEO_CATALOG.map((m) => m.id) as [string, ...string[]]
 
 export const DEFAULT_MODEL = 'nano-banana-pro-preview'
+export const DEFAULT_VIDEO_MODEL = 'veo-3.1-fast-generate-001'
 
-export function getModelConfig(modelId: string): ModelEntry {
-  const entry = findModel(modelId)
+export function getModelConfig(modelId: string): AnyModelEntry {
+  const entry = findModel(modelId) ?? findVideoModel(modelId)
   if (!entry) {
     console.error(pc.red(`Unknown model: ${modelId}`))
     process.exit(1)
@@ -122,6 +127,19 @@ async function createGatewayTextModel(modelId: string, provider: string): Promis
   return gateway(gatewayModelId)
 }
 
+/**
+ * Create a gateway-backed video model using createGateway from the AI SDK.
+ */
+async function createGatewayVideoModel(modelId: string, provider: string) {
+  const { createGateway } = await import('ai')
+  const gateway = createGateway({
+    apiKey: process.env['EGAKI_API_KEY']!,
+    baseURL: EGAKI_GATEWAY_URL,
+  })
+  const gatewayModelId = `${provider}/${modelId}`
+  return gateway.video(gatewayModelId)
+}
+
 // Lazily import the provider and create the right model instance.
 // This avoids loading all provider SDKs upfront — only the one needed
 // for the selected model gets imported.
@@ -167,6 +185,10 @@ export async function createTextModel(
   modelId: string,
 ): Promise<LanguageModel> {
   const config = getModelConfig(modelId)
+  if (config.strategy !== 'text') {
+    console.error(pc.red(`Model ${modelId} is not a text model`))
+    process.exit(1)
+  }
   ensureProviderKey(config.provider)
 
   // Direct provider key takes priority
@@ -190,6 +212,45 @@ export async function createTextModel(
   // Fall back to egaki gateway
   if (hasEgakiKey()) {
     return createGatewayTextModel(modelId, config.provider)
+  }
+
+  console.error(pc.red(`No API key available for provider: ${config.provider}`))
+  process.exit(1)
+}
+
+export async function createVideoModel(modelId: string): Promise<any> {
+  const config = getModelConfig(modelId)
+  if (config.strategy !== 'video') {
+    console.error(pc.red(`Model ${modelId} is not a video model`))
+    process.exit(1)
+  }
+
+  ensureProviderKey(config.provider)
+
+  // Direct provider key takes priority
+  if (hasDirectProviderKey(config.provider)) {
+    switch (config.provider) {
+      case 'google': {
+        const { google } = await import('@ai-sdk/google')
+        return google.video(modelId)
+      }
+      case 'fal': {
+        const { fal } = await import('@ai-sdk/fal')
+        return fal.video(modelId)
+      }
+      default:
+        console.error(
+          pc.red(
+            `Direct video generation is only supported for Google and Fal keys, got provider: ${config.provider}`,
+          ),
+        )
+        process.exit(1)
+    }
+  }
+
+  // Fall back to egaki gateway
+  if (hasEgakiKey()) {
+    return createGatewayVideoModel(modelId, config.provider)
   }
 
   console.error(pc.red(`No API key available for provider: ${config.provider}`))

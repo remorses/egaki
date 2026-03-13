@@ -10,7 +10,11 @@
 import { goke } from 'goke'
 import { z } from 'zod'
 import dedent from 'string-dedent'
-import { generateImage as aiGenerateImage, generateText } from 'ai'
+import {
+  generateImage as aiGenerateImage,
+  generateText,
+  experimental_generateVideo as aiGenerateVideo,
+} from 'ai'
 import fs from 'node:fs'
 import path from 'node:path'
 import pc from 'picocolors'
@@ -18,12 +22,15 @@ import pkg from '../package.json' with { type: 'json' }
 import { injectCredentialsToEnv, PROVIDERS } from './credentials.js'
 import {
   IMAGE_MODELS,
+  VIDEO_MODELS,
   DEFAULT_MODEL,
+  DEFAULT_VIDEO_MODEL,
   getModelConfig,
   createImageModel,
   createTextModel,
+  createVideoModel,
 } from './models.js'
-import type { ModelCost } from './model-catalog.js'
+import { VIDEO_CATALOG } from './video-model-catalog.js'
 import {
   loginInteractive,
   loginNonInteractive,
@@ -333,6 +340,118 @@ cli
     }
   })
 
+// ─── video command ───────────────────────────────────────────────────────────
+
+cli
+  .command(
+    'video <prompt>',
+    dedent`
+      Generate videos from a text prompt (or image+text prompt for models that
+      support image-to-video). Uses AI SDK experimental_generateVideo under the hood.
+
+      Agent note: video generation can be slow. When invoking this command from
+      automation, use a command timeout of at least 5 minutes.
+    `,
+  )
+  .option(
+    '-m, --model [model]',
+    z.enum(VIDEO_MODELS).default(DEFAULT_VIDEO_MODEL).describe('Video model ID for generation'),
+  )
+  .option(
+    '-o, --output [path]',
+    z
+      .string()
+      .default('egaki-output.mp4')
+      .describe('Output file path (index suffix added when generating multiple)'),
+  )
+  .option(
+    '-n, --count [n]',
+    z.number().default(1).describe('Number of videos to generate'),
+  )
+  .option(
+    '--aspect-ratio [ratio]',
+    z.string().describe('Video aspect ratio in WIDTH:HEIGHT format (e.g. 16:9, 9:16)'),
+  )
+  .option(
+    '--resolution [resolution]',
+    z
+      .string()
+      .describe('Video resolution in WIDTHxHEIGHT or provider format (e.g. 1280x720, 720p)'),
+  )
+  .option(
+    '--duration [seconds]',
+    z.number().describe('Video duration in seconds (provider/model-specific limits apply)'),
+  )
+  .option(
+    '--fps [fps]',
+    z.number().describe('Frames per second for video models that support fps override'),
+  )
+  .option(
+    '--seed [seed]',
+    z.number().describe('Seed for reproducible video generation (model support varies)'),
+  )
+  .option(
+    '-i, --input [file]',
+    z
+      .string()
+      .describe(
+        'Optional reference image for image-to-video. Accepts local file path or URL (http/https)',
+      ),
+  )
+  .option(
+    '--json',
+    'Output result metadata as JSON to stdout (model, usage, warnings, file paths)',
+  )
+  .option(
+    '--stdout',
+    'Write raw video bytes to stdout instead of saving to a file. Useful for piping to other tools',
+  )
+  .example('# Generate a video')
+  .example('egaki video "A paper airplane gliding through clouds" -o airplane.mp4')
+  .example('# Generate with Veo model + duration')
+  .example('egaki video "cinematic rainy street at night" -m veo-3.1-fast-generate-001 --duration 6')
+  .example('# Image-to-video (model support required)')
+  .example('egaki video "animate subtle camera pan" --model luma-ray-2 --input frame.png -o animated.mp4')
+  .example('# Generate multiple videos')
+  .example('egaki video "waves crashing on cliffs" -n 2 -o waves.mp4')
+  .action(async (prompt, options) => {
+    injectCredentialsToEnv()
+
+    const model = options.model
+    const outputPath = options.output
+    const config = getModelConfig(model)
+
+    if (config.strategy !== 'video') {
+      console.error(pc.red(`Model ${model} is not a video model`))
+      process.exit(1)
+    }
+
+    if (!options.stdout) {
+      console.error(pc.dim(`Model: ${model}`))
+      console.error(pc.dim(`Prompt: ${prompt}`))
+      console.error(pc.dim('Mode: Video API (experimental_generateVideo)'))
+    }
+
+    const inputImage = options.input
+      ? await readInputSource(options.input)
+      : undefined
+
+    await generateWithVideoModel({
+      prompt,
+      model,
+      outputPath,
+      count: options.count,
+      aspectRatio: options.aspectRatio,
+      resolution: options.resolution,
+      duration: options.duration,
+      fps: options.fps,
+      seed: options.seed,
+      inputImage,
+      json: options.json || false,
+      stdout: options.stdout || false,
+    })
+  })
+
 // ─── models command ──────────────────────────────────────────────────────────
 
 cli
@@ -347,12 +466,24 @@ cli
     '-p, --provider [provider]',
     z.string().describe('Filter models by provider name (e.g. google, openai, replicate, fal)'),
   )
+  .option(
+    '--type [type]',
+    z
+      .enum(['all', 'image', 'video'])
+      .default('all')
+      .describe('Filter by model type: image (image+text-image), video, or all'),
+  )
   .option('--json', 'Output as JSON instead of YAML')
   .action(async (options) => {
     const { CATALOG } = await import('./model-catalog.js')
     const yaml = await import('js-yaml')
 
-    let models = CATALOG
+    let models = options.type === 'video'
+      ? VIDEO_CATALOG
+      : options.type === 'image'
+        ? CATALOG
+        : [...CATALOG, ...VIDEO_CATALOG]
+
     if (options.provider) {
       models = models.filter((m) => m.provider === options.provider)
       if (models.length === 0) {
@@ -368,18 +499,29 @@ cli
       provider: m.provider,
       strategy: m.strategy,
       released: m.released,
-      cost:
-        m.cost.type === 'per-image'
-          ? `$${m.cost.perImage}/image`
-          : `$${m.cost.inputPerM}/M input, $${m.cost.outputPerM}/M output`,
-      features: {
-        editing: m.features.editing,
-        inpainting: m.features.inpainting,
-        seed: m.features.seed,
-        multipleImages: m.features.multipleImages,
-        aspectRatios: m.features.aspectRatios.join(', ') || 'none',
-        ...(m.features.sizes ? { sizes: m.features.sizes.join(', ') } : {}),
-      },
+      cost: formatCatalogCost(m.cost),
+      features:
+        m.strategy === 'video'
+          ? {
+              textToVideo: m.features.textToVideo,
+              imageToVideo: m.features.imageToVideo,
+              capabilities: m.features.capabilities.join(', ') || 'none',
+              seed: m.features.seed,
+              multipleVideos: m.features.multipleVideos,
+              aspectRatios: m.features.aspectRatios?.join(', ') || 'none',
+              resolutions: m.features.resolutions?.join(', ') || 'unknown',
+              durationRangeSec: m.features.durationRangeSec
+                ? `${m.features.durationRangeSec.min}-${m.features.durationRangeSec.max}`
+                : 'unknown',
+            }
+          : {
+              editing: m.features.editing,
+              inpainting: m.features.inpainting,
+              seed: m.features.seed,
+              multipleImages: m.features.multipleImages,
+              aspectRatios: m.features.aspectRatios.join(', ') || 'none',
+              ...(m.features.sizes ? { sizes: m.features.sizes.join(', ') } : {}),
+            },
     }))
 
     if (options.json) {
@@ -631,22 +773,185 @@ async function generateWithTextModel({
   }
 }
 
+// Generate using experimental_generateVideo (video models)
+async function generateWithVideoModel({
+  prompt,
+  model,
+  outputPath,
+  count,
+  aspectRatio,
+  resolution,
+  duration,
+  fps,
+  seed,
+  inputImage,
+  json,
+  stdout,
+}: {
+  prompt: string
+  model: string
+  outputPath: string
+  count: number
+  aspectRatio?: string
+  resolution?: string
+  duration?: number
+  fps?: number
+  seed?: number
+  inputImage?: Uint8Array
+  json: boolean
+  stdout: boolean
+}) {
+  const videoModel = await createVideoModel(model)
+
+  if (!stdout) {
+    console.error(pc.cyan('Generating...'))
+  }
+
+  const result = await aiGenerateVideo({
+    model: videoModel,
+    prompt: inputImage
+      ? { image: inputImage, text: prompt }
+      : prompt,
+    n: count,
+    ...(aspectRatio ? { aspectRatio: aspectRatio as `${number}:${number}` } : {}),
+    ...(resolution ? { resolution: resolution as `${number}x${number}` } : {}),
+    ...(duration != null ? { duration } : {}),
+    ...(fps != null ? { fps } : {}),
+    ...(seed != null ? { seed } : {}),
+  })
+
+  if (stdout) {
+    const video = result.videos[0]
+    if (video) {
+      process.stdout.write(Buffer.from(video.uint8Array))
+    }
+    return
+  }
+
+  const savedFiles: string[] = []
+  for (let i = 0; i < result.videos.length; i++) {
+    const video = result.videos[i]!
+    const ext = extensionFromMediaType(video.mediaType)
+    const filePath =
+      result.videos.length === 1
+        ? ensureExtension(outputPath, ext)
+        : insertIndex(outputPath, i, ext)
+
+    fs.writeFileSync(filePath, video.uint8Array)
+    console.error(pc.green(`Saved: ${filePath}`))
+    savedFiles.push(filePath)
+  }
+
+  const config = getModelConfig(model)
+  const cost = calculateCost(config.cost, {
+    videosGenerated: result.videos.length,
+    durationSeconds: duration,
+    resolution,
+  }, result.videos.length)
+  if (cost != null) {
+    console.error(pc.dim(`Cost: ${formatCost(cost)}`))
+  }
+
+  if (json) {
+    const output = {
+      model,
+      files: savedFiles,
+      count: result.videos.length,
+      cost,
+      warnings: result.warnings,
+      responses: result.responses,
+    }
+    console.log(JSON.stringify(output, null, 2))
+  }
+}
+
 // ─── cost helpers ────────────────────────────────────────────────────────────
 
 function calculateCost(
-  cost: ModelCost,
-  usage: { inputTokens?: number; outputTokens?: number; imagesGenerated?: number },
-  imageCount: number,
+  cost: {
+    type: 'per-image'
+    perImage: number
+  } | {
+    type: 'per-token'
+    inputPerM: number
+    outputPerM: number
+  } | {
+    type: 'per-video-second'
+    defaultDurationSec: number
+    tiers: Array<{ resolution?: string; costPerSecond: number }>
+  } | {
+    type: 'unknown'
+  },
+  usage: {
+    inputTokens?: number
+    outputTokens?: number
+    imagesGenerated?: number
+    videosGenerated?: number
+    durationSeconds?: number
+    resolution?: string
+  },
+  count: number = 1,
 ): number | null {
   if (cost.type === 'per-image') {
-    return cost.perImage * imageCount
+    return cost.perImage * count
   }
   if (cost.type === 'per-token' && usage.inputTokens != null && usage.outputTokens != null) {
     return (
       (usage.inputTokens * cost.inputPerM + usage.outputTokens * cost.outputPerM) / 1_000_000
     )
   }
+  if (cost.type === 'per-video-second') {
+    const durationSec = usage.durationSeconds ?? cost.defaultDurationSec
+    const resolution = normalizeResolutionKey(usage.resolution)
+    const tier =
+      cost.tiers.find((t) => normalizeResolutionKey(t.resolution) === resolution) ??
+      cost.tiers[0]
+    if (!tier) {
+      return null
+    }
+    return tier.costPerSecond * durationSec * count
+  }
   return null
+}
+
+function formatCatalogCost(
+  cost: {
+    type: 'per-image'
+    perImage: number
+  } | {
+    type: 'per-token'
+    inputPerM: number
+    outputPerM: number
+  } | {
+    type: 'per-video-second'
+    defaultDurationSec: number
+    tiers: Array<{ resolution?: string; mode?: string; audio?: boolean; costPerSecond: number }>
+  } | {
+    type: 'unknown'
+  },
+): string {
+  if (cost.type === 'per-image') {
+    return `$${cost.perImage}/image`
+  }
+  if (cost.type === 'per-token') {
+    return `$${cost.inputPerM}/M input, $${cost.outputPerM}/M output`
+  }
+  if (cost.type === 'per-video-second') {
+    const tierText = cost.tiers
+      .map((t) => {
+        const parts = [
+          t.resolution,
+          t.mode ? `mode=${t.mode}` : undefined,
+          t.audio != null ? `audio=${t.audio}` : undefined,
+        ].filter(Boolean)
+        return parts.length > 0
+          ? `$${t.costPerSecond}/s (${parts.join(', ')})`
+          : `$${t.costPerSecond}/s`
+      })
+      .join('; ')
+    return `${tierText} (default duration ${cost.defaultDurationSec}s)`
+  }
+  return 'unknown'
 }
 
 function formatCost(dollars: number): string {
@@ -662,8 +967,20 @@ function extensionFromMediaType(mediaType: string): string {
     'image/jpeg': '.jpg',
     'image/webp': '.webp',
     'image/gif': '.gif',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
   }
-  return map[mediaType] || '.png'
+  return map[mediaType] || (mediaType.startsWith('video/') ? '.mp4' : '.png')
+}
+
+function normalizeResolutionKey(input?: string): string | undefined {
+  if (!input) return undefined
+  const normalized = input.trim().toLowerCase()
+  if (normalized === '1920x1080') return '1080p'
+  if (normalized === '1280x720') return '720p'
+  if (normalized === '854x480' || normalized === '848x480') return '480p'
+  return normalized
 }
 
 function ensureExtension(filePath: string, ext: string): string {

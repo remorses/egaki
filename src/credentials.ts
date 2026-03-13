@@ -39,7 +39,7 @@ export const PROVIDERS: Record<
   },
 }
 
-export const EGAKI_GATEWAY_URL = 'https://egaki.org/v1/ai'
+export const EGAKI_GATEWAY_URL = 'https://egaki.org/v3/ai'
 
 function getConfigDir(): string {
   // XDG_CONFIG_HOME or ~/.config/egaki

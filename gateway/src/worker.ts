@@ -6,7 +6,7 @@
 // The spending cap per period equals the plan price. Our profit = markup portion.
 //
 // Endpoints:
-//   ALL /v1/ai/*       — AI Gateway proxy (validates key, checks spending, forwards)
+//   ALL /v3/ai/*       — AI Gateway proxy (validates key, checks spending, forwards)
 //   GET /buy           — Stripe checkout redirect (with ?plan=pro&email=user@example.com)
 //   GET /success       — Post-checkout page showing API key
 //   POST /stripe/webhook — Stripe webhook handler
@@ -15,14 +15,15 @@
 //   POST /api/cancel   — Cancel subscription
 //   GET /api/plans     — Available plans and pricing
 
-import { Hono } from 'hono'
+import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import Stripe from 'stripe'
 import { Resend } from 'resend'
+import type { Experimental_VideoModelV3CallOptions } from '@ai-sdk/provider'
 import type { Env } from './env.js'
 import { requireEnv, getPublicUrl } from './env.js'
 import { EgakiKv, type ApiKeyRecord } from './kv.js'
-import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getStripePriceId, getPlanByPriceId, type PlanId, type Currency, type Plan } from './plans.js'
+import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getVideoUserCost, getStripePriceId, getPlanByPriceId, type PlanId, type Currency, type Plan } from './plans.js'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -46,14 +47,18 @@ function extractApiKey(c: { req: { header: (name: string) => string | undefined 
 
 /**
  * Extract the model ID from AI SDK protocol headers.
- * The AI SDK sends model IDs in headers, not the JSON body:
- *   - ai-image-model-id: for image generation requests
- *   - ai-language-model-id: for text generation requests
+ * The AI Gateway provider sends model IDs in headers, not the JSON body.
+ * Current protocol uses:
+ *   - ai-model-id: for image/video gateway model endpoints
+ *   - ai-language-model-id: for language model endpoint
+ * Legacy headers are still accepted for compatibility.
  * Falls back to parsing the JSON body "model" field.
  */
 function extractModelId(c: { req: { header: (name: string) => string | undefined } }, bodyModel?: string): string {
   return (
+    c.req.header('ai-model-id') ??
     c.req.header('ai-image-model-id') ??
+    c.req.header('ai-video-model-id') ??
     c.req.header('ai-language-model-id') ??
     bodyModel ??
     'unknown'
@@ -71,6 +76,52 @@ function extractImageCount(bodyText: string | null): number {
   } catch {
     return 1
   }
+}
+
+function parseVideoRequest(bodyText: string | null): {
+  count: number
+  durationSec?: number
+  resolution?: string
+} {
+  if (!bodyText) {
+    return { count: 1 }
+  }
+
+  try {
+    const parsedUnknown = JSON.parse(bodyText) as unknown
+    if (!isObjectRecord(parsedUnknown)) {
+      return { count: 1 }
+    }
+
+    type GatewayVideoRequestBody = Partial<
+      Pick<Experimental_VideoModelV3CallOptions, 'n' | 'duration' | 'providerOptions'>
+    > & {
+      // AI Gateway can expose provider-specific aliases like "720p" in some routes.
+      resolution?: Experimental_VideoModelV3CallOptions['resolution'] | string
+    }
+
+    const parsed = parsedUnknown as GatewayVideoRequestBody
+
+    const count = typeof parsed.n === 'number' ? parsed.n : 1
+    const durationSec = typeof parsed.duration === 'number' ? parsed.duration : undefined
+    const resolution = readString(parsed.resolution)
+
+    return {
+      count: Math.max(1, Number(count)),
+      durationSec,
+      resolution,
+    }
+  } catch {
+    return { count: 1 }
+  }
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined
 }
 
 // ── Stripe signature verification (same as critique) ─────────────────────
@@ -179,10 +230,10 @@ app.get('/', (c) => {
 })
 
 // ── AI Gateway Proxy ─────────────────────────────────────────────────────
-// Proxies all /v1/* requests to the upstream Vercel AI Gateway.
+// Proxies /v3/ai/* to the upstream Vercel AI Gateway.
 // Validates egaki API key, checks credit balance, deducts on response.
 
-app.all('/v1/ai/*', async (c) => {
+const handleAiProxy = async (c: Context<{ Bindings: Env }>) => {
   const kv = new EgakiKv(c.env.EGAKI_KV)
 
   // 1. Extract and validate API key
@@ -250,9 +301,14 @@ app.all('/v1/ai/*', async (c) => {
   }
   const modelId = extractModelId(c, bodyModel)
   const imageCount = extractImageCount(bodyText)
-
-  // 4. Forward to upstream Vercel AI Gateway (preserve path + query string)
+  const videoRequest = parseVideoRequest(bodyText)
   const reqUrl = new URL(c.req.url)
+  const requestKind =
+    reqUrl.pathname.endsWith('/video-model') || c.req.header('ai-video-model-id')
+      ? 'video'
+      : 'image-or-text'
+
+  // 4. Forward to upstream Vercel AI Gateway as a transparent proxy.
   const upstreamUrl = `${UPSTREAM_BASE}${reqUrl.pathname}${reqUrl.search}`
 
   const upstreamHeaders = new Headers()
@@ -271,7 +327,13 @@ app.all('/v1/ai/*', async (c) => {
 
   // 5. Deduct usage on successful response (marked-up cost × image count)
   if (upstreamResponse.ok) {
-    const userCost = getModelUserCost(modelId) * imageCount
+    const userCost = requestKind === 'video'
+      ? getVideoUserCost(modelId, {
+          count: videoRequest.count,
+          durationSec: videoRequest.durationSec,
+          resolution: videoRequest.resolution,
+        })
+      : getModelUserCost(modelId) * imageCount
     await kv.incrementUsage(apiKey, userCost)
   }
 
@@ -284,7 +346,9 @@ app.all('/v1/ai/*', async (c) => {
     statusText: upstreamResponse.statusText,
     headers: responseHeaders,
   })
-})
+}
+
+app.all('/v3/ai/*', handleAiProxy)
 
 // ── Stripe Checkout ──────────────────────────────────────────────────────
 

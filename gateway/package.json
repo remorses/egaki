@@ -9,10 +9,11 @@
   },
   "dependencies": {
     "hono": "^4.7.10",
-    "stripe": "^20.2.0",
-    "resend": "^6.8.0"
+    "resend": "^6.8.0",
+    "stripe": "^20.2.0"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "3.0.8",
     "@cloudflare/workers-types": "^4.20250525.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.19.1"

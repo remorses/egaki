@@ -85,12 +85,42 @@ Only per-token pricing for language models is accurate. Per-image costs must be 
 manually from provider pricing pages for now. Hopefully this will be fixed eventually.
 
 ```bash
-# Fetch and explore the models catalog
-curl -s https://ai-gateway.vercel.sh/v1/models | jq '.data[] | select(.tags | index("image-generation"))' | head -100
+# Fetch all models (no truncation)
+curl -s https://ai-gateway.vercel.sh/v1/models | jq '.'
 
 # List all image-capable model IDs with their types
 curl -s https://ai-gateway.vercel.sh/v1/models | jq -r '.data[] | select(.tags | index("image-generation")) | "\(.id) (\(.type))"'
+
+# List all video-capable model IDs with their type and duration pricing tiers count
+curl -s https://ai-gateway.vercel.sh/v1/models | jq -r '.data[] | select(.type == "video") | "\(.id) (\(.type)) tiers=\((.pricing.video_duration_pricing // []) | length)"'
+
+# Inspect endpoint-level provider details for one model (pricing, params, capabilities)
+curl -s https://ai-gateway.vercel.sh/v1/models/google/veo-3.1-generate-001/endpoints | jq '.'
 ```
+
+## AI Gateway wire format source of truth
+
+When parsing AI Gateway request payloads in `gateway/src/worker.ts`, do not guess
+provider-specific fields. Use the `@ai-sdk/gateway` source code as the source of truth
+for what gets sent over the wire.
+
+Fetch source once if missing:
+
+```bash
+npx opensrc @ai-sdk/gateway
+```
+
+Then read these files in `opensrc/repos/github.com/vercel/ai/packages/gateway/src/`:
+
+- `gateway-video-model.ts` — exact request body for `/video-model`
+- `gateway-image-model.ts` — exact request body for `/image-model`
+- `gateway-language-model.ts` — exact request body/headers for `/language-model`
+- `gateway-video-model.test.ts` — request/response examples, including optional fields
+
+For video specifically, the current body fields are:
+`prompt`, `n`, `aspectRatio`, `resolution`, `duration`, `fps`, `seed`, `providerOptions`, `image`.
+`providerOptions` is passed through as-is (opaque), so billing logic must not depend on
+assumed provider-specific keys unless those keys are explicitly guaranteed by upstream docs.
 
 <!-- opensrc:start -->
 

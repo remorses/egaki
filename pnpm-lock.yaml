@@ -9,22 +9,22 @@ importers:
   .:
     dependencies:
       '@ai-sdk/fal':
-        specifier: ^2.0.21
+        specifier: 2.0.21
         version: 2.0.21(zod@4.3.6)
       '@ai-sdk/google':
-        specifier: ^3.0.33
+        specifier: 3.0.33
         version: 3.0.33(zod@4.3.6)
       '@ai-sdk/openai':
-        specifier: ^3.0.36
+        specifier: 3.0.36
         version: 3.0.36(zod@4.3.6)
       '@ai-sdk/replicate':
-        specifier: ^2.0.20
+        specifier: 2.0.20
         version: 2.0.20(zod@4.3.6)
       '@clack/prompts':
         specifier: ^1.0.1
         version: 1.0.1
       ai:
-        specifier: ^6.0.103
+        specifier: 6.0.103
         version: 6.0.103(zod@4.3.6)
       goke:
         specifier: ^6.1.3

@@ -24,6 +24,11 @@ function getOpenCommands(url: string): OpenCommand[] {
 }
 
 export function openUrlInBrowser(url: string): boolean {
+  // Avoid launching browser commands in non-interactive contexts (CI/pipes).
+  if (!process.stdout.isTTY || !process.stdin.isTTY) {
+    return false
+  }
+
   for (const candidate of getOpenCommands(url)) {
     try {
       const result = spawnSync(candidate.command, candidate.args, {

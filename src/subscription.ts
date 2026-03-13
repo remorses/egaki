@@ -18,8 +18,8 @@ import {
 import { EGAKI_GATEWAY_URL, saveProviderKey, getProviderKey } from './credentials.js'
 import { openUrlInBrowser } from './open-browser.js'
 
-// Strip /v1/ai suffix to get the base URL for non-proxy endpoints (/buy, /api/*)
-const GATEWAY_BASE = EGAKI_GATEWAY_URL.replace(/\/v1\/ai$/, '')
+// Strip /vN/ai suffix to get the base URL for non-proxy endpoints (/buy, /api/*)
+const GATEWAY_BASE = EGAKI_GATEWAY_URL.replace(/\/v\d+\/ai$/, '')
 
 type PlanInfo = {
   id: string
@@ -139,14 +139,11 @@ export async function subscribeInteractive(): Promise<void> {
     'Checkout',
   )
 
-  const canAutoOpen = process.stdout.isTTY && process.stdin.isTTY
-  if (canAutoOpen) {
-    const opened = openUrlInBrowser(checkoutUrl)
-    if (opened) {
-      log.success('Opened checkout URL in your browser')
-    } else {
-      log.info('Could not auto-open a browser. Open the URL above manually.')
-    }
+  const opened = openUrlInBrowser(checkoutUrl)
+  if (opened) {
+    log.success('Opened checkout URL in your browser')
+  } else if (process.stdout.isTTY && process.stdin.isTTY) {
+    log.info('Could not auto-open a browser. Open the URL above manually.')
   }
 
   // Ask if they want to enter the key now
