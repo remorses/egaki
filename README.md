@@ -55,6 +55,14 @@ egaki image "cyberpunk alley at night" --aspect-ratio 16:9
 egaki image "polaroid-style travel photo" --aspect-ratio 4:5
 ```
 
+### Use Google Cloud billing via Vertex AI
+
+```bash
+egaki login --provider vertex --key AIza...
+egaki image "editorial sneaker photo on white seamless" -m vertex/imagen-4.0-generate-001 -o sneaker.png
+egaki video "storm over mountains" -m vertex/veo-3.1-fast-generate-001 --duration 6 -o storm.mp4
+```
+
 ### Pipe image output to other tools
 
 ```bash
@@ -67,7 +75,7 @@ egaki image "flat icon of a fox" --stdout | magick - -resize 512x512 fox-icon.pn
 
 ```bash
 egaki video "a paper boat drifting on a calm lake at sunrise" -o boat.mp4
-egaki video "timelapse of a stormy sea, cinematic" -m google/veo-3.1-generate-001 --duration 8 -o storm.mp4
+egaki video "timelapse of a stormy sea, cinematic" -m veo-3.1-generate-001 --duration 8 -o storm.mp4
 ```
 
 ### Generate with a cheap model
@@ -88,7 +96,7 @@ egaki video "slowly animate the clouds" --input photo.jpg -m klingai/kling-v2.6-
 
 ```bash
 egaki video "aerial drone shot over a city grid" \
-  -m google/veo-3.1-fast-generate-001 \
+  -m veo-3.1-fast-generate-001 \
   --aspect-ratio 16:9 \
   --resolution 1080p \
   --duration 6 \
@@ -175,8 +183,9 @@ egaki image "mascot variations, flat vector look" \
 
 | Model ID | Best for | Example command |
 | --- | --- | --- |
-| `google/veo-3.1-generate-001` | Highest quality video with audio, up to 4K | `egaki video "rainy Tokyo street at night" -m google/veo-3.1-generate-001 --duration 8 -o tokyo.mp4` |
-| `google/veo-3.1-fast-generate-001` | Fast Veo with 720p–4K, good for iteration | `egaki video "abstract paint patterns" -m google/veo-3.1-fast-generate-001 --duration 5 -o paint.mp4` |
+| `veo-3.1-generate-001` | Highest quality video with audio, up to 4K | `egaki video "rainy Tokyo street at night" -m veo-3.1-generate-001 --duration 8 -o tokyo.mp4` |
+| `veo-3.1-fast-generate-001` | Fast Veo with 720p–4K, good for iteration | `egaki video "abstract paint patterns" -m veo-3.1-fast-generate-001 --duration 5 -o paint.mp4` |
+| `vertex/veo-3.1-generate-001` | Same as above, routed through Vertex AI | `egaki video "rainy Tokyo street" -m vertex/veo-3.1-generate-001 --duration 8 -o tokyo.mp4` |
 | `klingai/kling-v2.5-turbo-t2v` | Cheap, fast Kling text-to-video | `egaki video "a paper boat on a pond" -m klingai/kling-v2.5-turbo-t2v --duration 5 -o boat.mp4` |
 | `bytedance/seedance-v1.5-pro` | Bytedance, audio support, three resolutions | `egaki video "timelapse of clouds above mountains" -m bytedance/seedance-v1.5-pro -o clouds.mp4` |
 | `xai/grok-imagine-video` | xAI video generation, cheap for short clips | `egaki video "a dog catching a frisbee" -m xai/grok-imagine-video --duration 3 -o dog.mp4` |
@@ -189,6 +198,7 @@ egaki image "mascot variations, flat vector look" \
 - **BFL image models (`flux-*`)**: Kontext/Pro variants via AI Gateway subscription
 - **Recraft models (`recraft-*`)**: v2/v3/v4 families available via AI Gateway subscription
 - **xAI image models (`grok-imagine-*`)**: Grok image generation via AI Gateway subscription
+- **Vertex models (`vertex/*`)**: same models as Google AI Studio, routed through Vertex AI / Google Cloud billing
 - **Google Veo video models**: up to 4K, audio optional, duration 4–8s
 - **Kling video models**: mode (std/pro), audio on v2.6+, image-to-video support
 - **Bytedance Seedance**: 480p–1080p, audio support on v1.5-pro
@@ -200,6 +210,7 @@ egaki supports **both** authentication modes:
 
 - **BYOK (bring your own keys):** add provider keys with `egaki login` per provider.
 - **Egaki subscription:** use one `egaki_...` key to access all supported models without managing keys for each provider.
+- **Google vs Vertex:** bare model IDs (e.g. `imagen-4.0-generate-001`) use Google AI Studio. Prefix with `vertex/` (e.g. `vertex/imagen-4.0-generate-001`) to route through Vertex AI / Google Cloud billing.
 
 ```bash
 # Subscribe and get a checkout URL
@@ -211,8 +222,9 @@ egaki subscribe --plan pro
 # Save your Egaki key after checkout
 egaki login --provider egaki --key egaki_...
 
-# BYOK example (direct provider key)
+# BYOK examples (direct provider keys)
 egaki login --provider google --key AIza...
+egaki login --provider vertex --key AIza...
 
 # Check subscription usage / cancel
 egaki usage

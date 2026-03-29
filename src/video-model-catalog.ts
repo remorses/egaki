@@ -169,6 +169,67 @@ export const VIDEO_CATALOG: VideoModelEntry[] = [
       multipleVideos: true,
     },
   },
+  // ── Vertex: Veo ──────────────────────────────────────────────────────
+  // Same Veo models routed through Vertex AI / Google Cloud billing.
+  // Use `egaki login --provider vertex --key <key>` to configure.
+  {
+    id: 'vertex/veo-3.1-generate-001',
+    name: 'Veo 3.1 (Vertex)',
+    provider: 'vertex',
+    strategy: 'video',
+    released: '2026-01',
+    cost: {
+      type: 'per-video-second',
+      defaultDurationSec: 8,
+      tiers: [
+        { resolution: '720p', audio: false, costPerSecond: 0.2 },
+        { resolution: '720p', audio: true, costPerSecond: 0.4 },
+        { resolution: '1080p', audio: false, costPerSecond: 0.2 },
+        { resolution: '1080p', audio: true, costPerSecond: 0.4 },
+        { resolution: '4k', audio: false, costPerSecond: 0.4 },
+        { resolution: '4k', audio: true, costPerSecond: 0.6 },
+      ],
+    },
+    features: {
+      textToVideo: true,
+      imageToVideo: false,
+      capabilities: ['t2v'],
+      aspectRatios: ['16:9', '9:16'],
+      resolutions: ['720p', '1080p', '4k'],
+      durationRangeSec: { min: 4, max: 8 },
+      seed: true,
+      multipleVideos: true,
+    },
+  },
+  {
+    id: 'vertex/veo-3.1-fast-generate-001',
+    name: 'Veo 3.1 Fast (Vertex)',
+    provider: 'vertex',
+    strategy: 'video',
+    released: '2026-01',
+    cost: {
+      type: 'per-video-second',
+      defaultDurationSec: 8,
+      tiers: [
+        { resolution: '720p', audio: false, costPerSecond: 0.1 },
+        { resolution: '720p', audio: true, costPerSecond: 0.15 },
+        { resolution: '1080p', audio: false, costPerSecond: 0.1 },
+        { resolution: '1080p', audio: true, costPerSecond: 0.15 },
+        { resolution: '4k', audio: false, costPerSecond: 0.3 },
+        { resolution: '4k', audio: true, costPerSecond: 0.35 },
+      ],
+    },
+    features: {
+      textToVideo: true,
+      imageToVideo: false,
+      capabilities: ['t2v'],
+      aspectRatios: ['16:9', '9:16'],
+      resolutions: ['720p', '1080p', '4k'],
+      durationRangeSec: { min: 4, max: 8 },
+      seed: true,
+      multipleVideos: true,
+    },
+  },
   {
     id: 'grok-imagine-video',
     name: 'Grok Imagine Video',
