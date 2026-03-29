@@ -76,6 +76,20 @@ export function ensureProviderKey(providerName: string): void {
   // If direct provider key exists, we're good
   if (hasDirectProviderKey(providerName)) return
 
+  // Vertex models require a direct key — the upstream Vercel AI Gateway
+  // does not support vertex/ routing, so egaki gateway can't proxy them.
+  if (providerName === 'vertex') {
+    console.error('')
+    console.error(pc.red(pc.bold('Vertex models require a direct Google Cloud API key')))
+    console.error('')
+    console.error(`  ${pc.cyan('egaki login --provider vertex --key <key>')}`)
+    console.error('')
+    console.error(pc.dim('Get a key at https://console.cloud.google.com/apis/credentials'))
+    console.error(pc.dim('Egaki subscription does not cover Vertex routing yet.'))
+    console.error('')
+    process.exit(1)
+  }
+
   // If egaki key exists, we'll route through the gateway
   if (hasEgakiKey()) return
 
