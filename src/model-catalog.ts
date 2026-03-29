@@ -109,6 +109,22 @@ const xaiImage = {
   strategy: 'image' as const,
 }
 
+const vertexImagen = {
+  provider: 'vertex',
+  strategy: 'image' as const,
+  features: {
+    ...googleImagen.features,
+  },
+}
+
+const vertexText = {
+  provider: 'vertex',
+  strategy: 'text' as const,
+  features: {
+    ...googleText.features,
+  },
+}
+
 const fluxAspectRatios = ['1:1', '3:4', '4:3', '9:16', '16:9', '9:21', '21:9']
 
 // ─── catalog ─────────────────────────────────────────────────────────────────
@@ -187,6 +203,64 @@ export const CATALOG: ModelEntry[] = [
       ...googleText.features,
       aspectRatios: [
         ...googleText.features.aspectRatios,
+        '4:1',
+        '1:4',
+        '8:1',
+        '1:8',
+      ],
+    },
+    cost: { type: 'per-token', inputPerM: 0.5, outputPerM: 3.0 },
+  },
+
+  // ── Vertex: Imagen ──────────────────────────────────────────────────────
+  // Same models as Google AI Studio but routed through Vertex AI / Google Cloud billing.
+  // Use `egaki login --provider vertex --key <key>` to configure.
+  {
+    id: 'vertex/imagen-4.0-generate-001',
+    name: 'Imagen 4 (Vertex)',
+    released: '2025-08-15',
+    ...vertexImagen,
+    cost: { type: 'per-image', perImage: 0.04 },
+  },
+  {
+    id: 'vertex/imagen-4.0-ultra-generate-001',
+    name: 'Imagen 4 Ultra (Vertex)',
+    released: '2025-08-15',
+    ...vertexImagen,
+    cost: { type: 'per-image', perImage: 0.06 },
+  },
+  {
+    id: 'vertex/imagen-4.0-fast-generate-001',
+    name: 'Imagen 4 Fast (Vertex)',
+    released: '2025-08-15',
+    ...vertexImagen,
+    cost: { type: 'per-image', perImage: 0.02 },
+  },
+
+  // ── Vertex: Gemini text+image ─────────────────────────────────────────
+  {
+    id: 'vertex/gemini-2.5-flash-image',
+    name: 'Gemini 2.5 Flash Image (Vertex)',
+    released: '2025-08-26',
+    ...vertexText,
+    cost: { type: 'per-token', inputPerM: 0.3, outputPerM: 30 },
+  },
+  {
+    id: 'vertex/gemini-3-pro-image-preview',
+    name: 'Gemini 3 Pro Image (Vertex)',
+    released: '2025-11-20',
+    ...vertexText,
+    cost: { type: 'per-token', inputPerM: 1.25, outputPerM: 10 },
+  },
+  {
+    id: 'vertex/gemini-3.1-flash-image-preview',
+    name: 'Gemini 3.1 Flash Image (Vertex)',
+    released: '2026-02-26',
+    ...vertexText,
+    features: {
+      ...vertexText.features,
+      aspectRatios: [
+        ...vertexText.features.aspectRatios,
         '4:1',
         '1:4',
         '8:1',

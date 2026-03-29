@@ -22,6 +22,11 @@ export const PROVIDERS: Record<
     label: 'Google AI (Gemini, Imagen)',
     hint: 'Get your key at https://aistudio.google.com/apikey',
   },
+  vertex: {
+    envVar: 'GOOGLE_VERTEX_API_KEY',
+    label: 'Google Vertex AI (Gemini, Imagen, Veo via Google Cloud)',
+    hint: 'Get an API key at https://console.cloud.google.com/apis/credentials',
+  },
   openai: {
     envVar: 'OPENAI_API_KEY',
     label: 'OpenAI (DALL-E)',

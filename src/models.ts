@@ -29,6 +29,16 @@ export type { ModelEntry, VideoModelEntry }
 export const IMAGE_MODELS = CATALOG.map((m) => m.id) as [string, ...string[]]
 export const VIDEO_MODELS = VIDEO_CATALOG.map((m) => m.id) as [string, ...string[]]
 
+/**
+ * Strip provider prefix from a model ID (e.g. "vertex/imagen-4.0-generate-001" → "imagen-4.0-generate-001").
+ * Provider SDKs expect bare model IDs, but the catalog uses prefixed IDs for routing.
+ */
+function stripProviderPrefix(modelId: string): string {
+  const slash = modelId.indexOf('/')
+  if (slash === -1) return modelId
+  return modelId.slice(slash + 1)
+}
+
 export const DEFAULT_MODEL = 'nano-banana-pro-preview'
 export const DEFAULT_VIDEO_MODEL = 'veo-3.1-fast-generate-001'
 
@@ -109,8 +119,11 @@ async function createGatewayImageModel(modelId: string, provider: string): Promi
     apiKey: process.env['EGAKI_API_KEY']!,
     baseURL: EGAKI_GATEWAY_URL,
   })
-  // Gateway expects provider/model format for routing
-  const gatewayModelId = `${provider}/${modelId}`
+  // Gateway expects provider/model format for routing.
+  // For models that already have a prefix (e.g. vertex/imagen-4.0), strip it
+  // and use the catalog provider. For bare IDs, prepend the provider.
+  const bareId = stripProviderPrefix(modelId)
+  const gatewayModelId = `${provider}/${bareId}`
   return gateway.image(gatewayModelId)
 }
 
@@ -123,7 +136,8 @@ async function createGatewayTextModel(modelId: string, provider: string): Promis
     apiKey: process.env['EGAKI_API_KEY']!,
     baseURL: EGAKI_GATEWAY_URL,
   })
-  const gatewayModelId = `${provider}/${modelId}`
+  const bareId = stripProviderPrefix(modelId)
+  const gatewayModelId = `${provider}/${bareId}`
   return gateway(gatewayModelId)
 }
 
@@ -136,7 +150,8 @@ async function createGatewayVideoModel(modelId: string, provider: string) {
     apiKey: process.env['EGAKI_API_KEY']!,
     baseURL: EGAKI_GATEWAY_URL,
   })
-  const gatewayModelId = `${provider}/${modelId}`
+  const bareId = stripProviderPrefix(modelId)
+  const gatewayModelId = `${provider}/${bareId}`
   return gateway.video(gatewayModelId)
 }
 
@@ -155,6 +170,10 @@ export async function createImageModel(modelId: string): Promise<ImageModel> {
       case 'google': {
         const { google } = await import('@ai-sdk/google')
         return google.image(modelId)
+      }
+      case 'vertex': {
+        const { vertex } = await import('@ai-sdk/google-vertex')
+        return vertex.image(stripProviderPrefix(modelId))
       }
       case 'openai': {
         const { openai } = await import('@ai-sdk/openai')
@@ -198,11 +217,15 @@ export async function createTextModel(
         const { google } = await import('@ai-sdk/google')
         return google(modelId)
       }
+      case 'vertex': {
+        const { vertex } = await import('@ai-sdk/google-vertex')
+        return vertex(stripProviderPrefix(modelId))
+      }
       default:
-        // Only Google supports generateText with responseModalities for images
+        // Only Google/Vertex support generateText with responseModalities for images
         console.error(
           pc.red(
-            `Text+image generation is only supported for Google models, got provider: ${config.provider}`,
+            `Text+image generation is only supported for Google/Vertex models, got provider: ${config.provider}`,
           ),
         )
         process.exit(1)
@@ -234,6 +257,10 @@ export async function createVideoModel(modelId: string): Promise<any> {
         const { google } = await import('@ai-sdk/google')
         return google.video(modelId)
       }
+      case 'vertex': {
+        const { vertex } = await import('@ai-sdk/google-vertex')
+        return vertex.video(stripProviderPrefix(modelId))
+      }
       case 'fal': {
         const { fal } = await import('@ai-sdk/fal')
         return fal.video(modelId)
@@ -241,7 +268,7 @@ export async function createVideoModel(modelId: string): Promise<any> {
       default:
         console.error(
           pc.red(
-            `Direct video generation is only supported for Google and Fal keys, got provider: ${config.provider}`,
+            `Direct video generation is only supported for Google, Vertex, and Fal keys, got provider: ${config.provider}`,
           ),
         )
         process.exit(1)

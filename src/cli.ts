@@ -98,6 +98,7 @@ cli
   .example('egaki login')
   .example('# Non-interactive login with flags')
   .example('egaki login --provider google --key AIza...')
+  .example('egaki login --provider vertex --key AIza...')
   .example('# Pipe key from stdin (useful in CI/scripts)')
   .example('echo "AIza..." | egaki login --provider google')
   .example('# Show configured providers')
@@ -283,6 +284,8 @@ cli
   .example('egaki image "fill with flowers" --input photo.jpg --mask mask.png')
   .example('# Generate with Gemini multimodal at 4K')
   .example('egaki image "dreamy landscape" -m gemini-2.5-flash-image --image-size 4K')
+  .example('# Route through Vertex AI (Google Cloud billing)')
+  .example('egaki image "product photo on marble" -m vertex/imagen-4.0-generate-001')
   .example('# Generate multiple images')
   .example('egaki image "abstract art" -n 4 -o art.png')
   .example('# Pipe to another tool')
@@ -410,6 +413,8 @@ cli
   .example('egaki video "A paper airplane gliding through clouds" -o airplane.mp4')
   .example('# Generate with Veo model + duration')
   .example('egaki video "cinematic rainy street at night" -m veo-3.1-fast-generate-001 --duration 6')
+  .example('# Route through Vertex AI (Google Cloud billing)')
+  .example('egaki video "storm over mountains" -m vertex/veo-3.1-fast-generate-001 --duration 6')
   .example('# Image-to-video (model support required)')
   .example('egaki video "animate subtle camera pan" --model luma-ray-2 --input frame.png -o animated.mp4')
   .example('# Generate multiple videos')
@@ -597,7 +602,11 @@ async function generateWithImageModel({
     ? { text: prompt, images: inputImages, ...(maskImage ? { mask: maskImage } : {}) }
     : prompt
 
+  const config = getModelConfig(model)
   const imageModel = await createImageModel(model)
+
+  // Use the correct providerOptions key based on provider (google vs vertex)
+  const providerOptionsKey = config.provider === 'vertex' ? 'vertex' : 'google'
 
   if (!stdout) {
     console.error(pc.cyan('Generating...'))
@@ -610,7 +619,7 @@ async function generateWithImageModel({
     ...(aspectRatio ? { aspectRatio } : {}),
     ...(seed !== undefined ? { seed } : {}),
     providerOptions: {
-      google: {
+      [providerOptionsKey]: {
         ...(allowPeople ? { personGeneration: 'allow_all' } : {}),
         ...(aspectRatio ? { aspectRatio } : {}),
       },
@@ -640,7 +649,6 @@ async function generateWithImageModel({
     savedFiles.push(filePath)
   }
 
-  const config = getModelConfig(model)
   const cost = calculateCost(config.cost, result.usage, result.images.length)
   if (cost != null) {
     console.error(pc.dim(`Cost: ${formatCost(cost)}`))
@@ -680,6 +688,8 @@ async function generateWithTextModel({
   stdout: boolean
 }) {
   const textModel = await createTextModel(model)
+  const config = getModelConfig(model)
+  const providerOptionsKey = config.provider === 'vertex' ? 'vertex' : 'google'
 
   if (!stdout) {
     console.error(pc.cyan('Generating...'))
@@ -705,7 +715,7 @@ async function generateWithTextModel({
     model: textModel,
     ...(messages ? { messages } : { prompt }),
     providerOptions: {
-      google: {
+      [providerOptionsKey]: {
         responseModalities: ['TEXT', 'IMAGE'],
         ...(imageSize || aspectRatio
           ? {
@@ -750,7 +760,6 @@ async function generateWithTextModel({
     savedFiles.push(filePath)
   }
 
-  const config = getModelConfig(model)
   const cost = calculateCost(config.cost, result.usage, imageFiles.length)
   if (cost != null) {
     console.error(pc.dim(`Cost: ${formatCost(cost)}`))

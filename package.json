@@ -54,6 +54,7 @@
   "dependencies": {
     "@ai-sdk/fal": "2.0.21",
     "@ai-sdk/google": "3.0.33",
+    "@ai-sdk/google-vertex": "^4.0.95",
     "@ai-sdk/openai": "3.0.36",
     "@ai-sdk/replicate": "2.0.20",
     "@clack/prompts": "^1.0.1",
