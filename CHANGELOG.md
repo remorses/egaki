@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0
+
+1. **Google Vertex AI provider** — use Google Cloud billing instead of AI Studio by
+   prefixing model IDs with `vertex/`:
+
+   ```bash
+   egaki login --provider vertex --key AIza...
+   egaki image "product shot on marble" -m vertex/imagen-4.0-generate-001 -o product.png
+   egaki image "editorial portrait" -m vertex/gemini-3.1-flash-image-preview --aspect-ratio 4:5
+   egaki video "storm over mountains" -m vertex/veo-3.1-fast-generate-001 --duration 6 -o storm.mp4
+   ```
+
+   Bare model IDs (e.g. `imagen-4.0-generate-001`) continue to route through Google AI
+   Studio as before. `vertex/` prefix routes through `@ai-sdk/google-vertex` using your
+   `GOOGLE_VERTEX_API_KEY`. The two providers are fully independent — having one key does
+   not affect the other.
+
+   Supported Vertex models:
+   - `vertex/imagen-4.0-generate-001`, `vertex/imagen-4.0-ultra-generate-001`, `vertex/imagen-4.0-fast-generate-001`
+   - `vertex/gemini-2.5-flash-image`, `vertex/gemini-3-pro-image-preview`, `vertex/gemini-3.1-flash-image-preview`
+   - `vertex/veo-3.1-generate-001`, `vertex/veo-3.1-fast-generate-001`
+
+2. **`egaki models --provider vertex`** — list only Vertex models:
+
+   ```bash
+   egaki models --provider vertex
+   ```
+
+3. **Fixed confusing error for Vertex without a key** — if you attempt a `vertex/` model
+   without a `GOOGLE_VERTEX_API_KEY` configured, you now get a clear error pointing you
+   to set one up instead of a cryptic upstream failure.
+
 ## 0.2.0
 
 1. **New `egaki video` command** — generate videos from text prompts or still images.
