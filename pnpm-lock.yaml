@@ -30,8 +30,8 @@ importers:
         specifier: 6.0.103
         version: 6.0.103(zod@4.3.6)
       goke:
-        specifier: ^6.1.3
-        version: 6.1.3
+        specifier: ^6.6.1
+        version: 6.6.1
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -377,8 +377,8 @@ packages:
   get-tsconfig@4.13.6:
     resolution: {integrity: sha512-shZT/QMiSHc/YBLxxOkMtgSid5HFoauqCE3/exfsEcwg1WkeqjG+V40yBbBrsD+jW2HDXcs28xOfcbm2jI8Ddw==}
 
-  goke@6.1.3:
-    resolution: {integrity: sha512-Us/lVxKgBgxdiXp1IPnByf6VuZWvBpimIxRsGB6SWTxGMsOipsYqTc9ZuIE6zKuookxobxKwzx4wUHf0Y+hkdg==}
+  goke@6.6.1:
+    resolution: {integrity: sha512-J2tmLZC9WE1IpPd1WROKMxla4ko0mthd44C/hdURKb6XPZtdNkLPyLFJxGOvmNmLpVJ6EkQkVGqlRl9Rpq1cbg==}
     engines: {node: '>=18'}
 
   google-auth-library@10.6.2:
@@ -725,9 +725,7 @@ snapshots:
     dependencies:
       resolve-pkg-maps: 1.0.0
 
-  goke@6.1.3:
-    dependencies:
-      picocolors: 1.1.1
+  goke@6.6.1: {}
 
   google-auth-library@10.6.2:
     dependencies:

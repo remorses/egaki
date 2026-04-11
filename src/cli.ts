@@ -294,8 +294,12 @@ cli
     // Inject stored API keys as env vars before calling the AI SDK
     injectCredentialsToEnv()
 
-    const model = options.model
-    const outputPath = options.output
+    // goke infers schema .default() values via Zod's input type, which leaves
+    // options.model / options.output / options.count as `T | undefined` even
+    // though the runtime always resolves them. Apply the same defaults here.
+    const model = options.model ?? DEFAULT_MODEL
+    const outputPath = options.output ?? 'egaki-output.png'
+    const count = options.count ?? 1
     const config = getModelConfig(model)
 
     if (!options.stdout) {
@@ -320,7 +324,7 @@ cli
         prompt,
         model,
         outputPath,
-        count: options.count,
+        count,
         aspectRatio: options.aspectRatio as `${number}:${number}` | undefined,
         seed: options.seed,
         inputImages,
@@ -422,8 +426,10 @@ cli
   .action(async (prompt, options) => {
     injectCredentialsToEnv()
 
-    const model = options.model
-    const outputPath = options.output
+    // Apply the same .default(...) values goke's input-type inference drops.
+    const model = options.model ?? DEFAULT_VIDEO_MODEL
+    const outputPath = options.output ?? 'egaki-output.mp4'
+    const count = options.count ?? 1
     const config = getModelConfig(model)
 
     if (config.strategy !== 'video') {
@@ -445,7 +451,7 @@ cli
       prompt,
       model,
       outputPath,
-      count: options.count,
+      count,
       aspectRatio: options.aspectRatio,
       resolution: options.resolution,
       duration: options.duration,
