@@ -20,6 +20,14 @@ egaki image "a watercolor fox reading a map" -o fox.png
 egaki video "a paper boat drifting on a calm lake at sunrise" -o boat.mp4
 ```
 
+### Quick start with ChatGPT auth
+
+```bash
+egaki login --provider chatgpt
+egaki image "a dreamy studio ghibli style bakery at sunrise" -m gpt-image-1.5 -o bakery.png
+egaki image "change the red jacket to a blue jacket" -m gpt-image-1.5 --input portrait.png -o portrait-blue.png
+```
+
 ## CLI examples
 
 ### Generate an image from text
@@ -34,6 +42,7 @@ egaki image "isometric floating city, detailed, soft colors" -m imagen-4.0-gener
 ```bash
 egaki image "add a red scarf and make it winter" --input portrait.jpg -o portrait-winter.png
 egaki image "turn this into a manga panel" --input https://example.com/photo.jpg -o manga.png
+egaki image "change the red square to a blue square" -m gpt-image-1.5 --input input.png -o output.png
 ```
 
 ### Inpainting with a mask
@@ -53,6 +62,7 @@ egaki image "minimal logo concepts for a cat cafe" -n 4 -o logo.png
 ```bash
 egaki image "cyberpunk alley at night" --aspect-ratio 16:9
 egaki image "polaroid-style travel photo" --aspect-ratio 4:5
+egaki image "wide landscape matte painting" -m gpt-image-1.5 --aspect-ratio 3:2 -o wide.png
 ```
 
 ### Use Google Cloud billing via Vertex AI
@@ -209,6 +219,7 @@ egaki image "mascot variations, flat vector look" \
 egaki supports **both** authentication modes:
 
 - **BYOK (bring your own keys):** add provider keys with `egaki login` per provider.
+- **ChatGPT auth:** log in with `egaki login --provider chatgpt` to use the ChatGPT/Codex backend for supported OpenAI image generation and editing flows.
 - **Egaki subscription:** use one `egaki_...` key to access all supported models without managing keys for each provider.
 - **Google vs Vertex:** bare model IDs (e.g. `imagen-4.0-generate-001`) use Google AI Studio. Prefix with `vertex/` (e.g. `vertex/imagen-4.0-generate-001`) to route through Vertex AI / Google Cloud billing.
 
@@ -225,6 +236,10 @@ egaki login --provider egaki --key egaki_...
 # BYOK examples (direct provider keys)
 egaki login --provider google --key AIza...
 egaki login --provider vertex --key AIza...
+
+# ChatGPT OAuth for Codex-backed image generation/editing
+egaki login --provider chatgpt
+egaki image "turn this product shot into a clay render" -m gpt-image-1.5 --input product.png -o product-clay.png
 
 # Check subscription usage / cancel
 egaki usage
