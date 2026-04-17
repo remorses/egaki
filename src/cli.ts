@@ -18,8 +18,14 @@ import {
 import fs from 'node:fs'
 import path from 'node:path'
 import pc from 'picocolors'
+import { createParser, type EventSourceMessage } from 'eventsource-parser'
 import pkg from '../package.json' with { type: 'json' }
-import { injectCredentialsToEnv, PROVIDERS } from './credentials.js'
+import {
+  injectCredentialsToEnv,
+  PROVIDERS,
+  getChatGptAuth,
+  saveChatGptAuth,
+} from './credentials.js'
 import {
   IMAGE_MODELS,
   VIDEO_MODELS,
@@ -29,6 +35,7 @@ import {
   createImageModel,
   createTextModel,
   createVideoModel,
+  shouldUseResponsesApi,
 } from './models.js'
 import { VIDEO_CATALOG } from './video-model-catalog.js'
 import {
@@ -44,6 +51,7 @@ import {
   unsubscribe,
   showUsage,
 } from './subscription.js'
+import { getValidChatGptAuth } from './chatgpt-auth.js'
 
 const cli = goke('egaki')
 
@@ -118,8 +126,13 @@ cli
 
     // Non-interactive: --provider + --key or stdin
     if (options.provider) {
+      // ChatGPT uses browser OAuth — skip key reading
+      if (options.provider === 'chatgpt') {
+        await loginNonInteractive({ provider: options.provider, key: '' })
+        return
+      }
       const key = options.key || (await readKeyFromStdin())
-      loginNonInteractive({ provider: options.provider, key })
+      await loginNonInteractive({ provider: options.provider, key })
       return
     }
 
@@ -291,7 +304,7 @@ cli
   .example('# Pipe to another tool')
   .example('egaki image "logo design" --stdout | convert - -resize 512x512 logo.png')
   .action(async (prompt, options) => {
-    // Inject stored API keys as env vars before calling the AI SDK
+    // Inject stored API keys as env vars before calling the AI SDK.
     injectCredentialsToEnv()
 
     // goke infers schema .default() values via Zod's input type, which leaves
@@ -305,13 +318,6 @@ cli
     if (!options.stdout) {
       console.error(pc.dim(`Model: ${model}`))
       console.error(pc.dim(`Prompt: ${prompt}`))
-      console.error(
-        pc.dim(
-          config.strategy === 'image'
-            ? 'Mode: Image API (generateImage)'
-            : 'Mode: Text+Image (generateText)',
-        ),
-      )
     }
 
     const inputImages = await readInputImages(options.input)
@@ -319,7 +325,24 @@ cli
       ? await readInputSource(options.mask)
       : undefined
 
-    if (config.strategy === 'image') {
+    // When using ChatGPT OAuth with OpenAI image models, route through the
+    // Responses API + imageGeneration tool instead of the Image API.
+    // The Codex OAuth client lacks the `api.model.images.request` scope.
+    const useResponsesApi = config.strategy === 'image' && shouldUseResponsesApi(model)
+
+    if (useResponsesApi) {
+      if (!options.stdout) {
+        console.error(pc.dim('Mode: Responses API (ChatGPT OAuth)'))
+      }
+      await generateWithResponsesApi({
+        prompt,
+        model,
+        outputPath,
+        inputImages,
+        json: options.json || false,
+        stdout: options.stdout || false,
+      })
+    } else if (config.strategy === 'image') {
       await generateWithImageModel({
         prompt,
         model,
@@ -783,6 +806,162 @@ async function generateWithTextModel({
       text: result.text || null,
       cost,
       usage: result.usage,
+    }
+    console.log(JSON.stringify(output, null, 2))
+  }
+}
+
+// Generate using the OpenAI Responses API with imageGeneration tool.
+// Used when auth comes from ChatGPT OAuth (no Image API scope).
+async function generateWithResponsesApi({
+  prompt,
+  model,
+  outputPath,
+  inputImages,
+  json,
+  stdout,
+}: {
+  prompt: string
+  model: string
+  outputPath: string
+  inputImages: Uint8Array[]
+  json: boolean
+  stdout: boolean
+}) {
+  if (inputImages.length > 0) {
+    console.error(pc.red('ChatGPT image generation with input images is not supported yet.'))
+    process.exit(1)
+  }
+
+  const storedAuth = getChatGptAuth()
+  if (!storedAuth?.accountId) {
+    console.error(pc.red('Missing ChatGPT account metadata. Please run `egaki login --provider chatgpt` again.'))
+    process.exit(1)
+  }
+
+  const auth = await getValidChatGptAuth(storedAuth, saveChatGptAuth)
+  if (auth instanceof Error) {
+    console.error(pc.red(auth.message))
+    process.exit(1)
+  }
+
+  if (!stdout) {
+    console.error(pc.cyan('Generating...'))
+  }
+
+  const response = await fetch('https://chatgpt.com/backend-api/codex/responses', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${auth.access}`,
+      'ChatGPT-Account-ID': auth.accountId,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-5.4',
+      instructions: 'You are Codex.',
+      input: [
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: prompt }],
+        },
+      ],
+      tools: [
+        {
+          type: 'image_generation',
+          model,
+          size: 'auto',
+          quality: 'auto',
+          output_format: 'png',
+          output_compression: 100,
+          moderation: 'auto',
+        },
+      ],
+      tool_choice: 'auto',
+      parallel_tool_calls: true,
+      stream: true,
+      store: false,
+      include: [],
+    }),
+  })
+
+  if (!response.ok || !response.body) {
+    const body = await response.text().catch(() => '')
+    console.error(pc.red(`ChatGPT image generation failed: ${response.status}`))
+    if (body) console.error(pc.dim(body))
+    process.exit(1)
+  }
+
+  let imageBase64: string | undefined
+  let revisedPrompt: string | null = null
+
+  const processSseMessage = (message: EventSourceMessage) => {
+    if (!message.data) return
+    try {
+      const event = JSON.parse(message.data) as {
+        type?: string
+        partial_image_b64?: string
+        item?: { type?: string; result?: string; revised_prompt?: string | null }
+      }
+      if (
+        event.type === 'response.image_generation_call.partial_image' &&
+        event.partial_image_b64 &&
+        !imageBase64
+      ) {
+        imageBase64 = event.partial_image_b64
+      }
+      if (
+        event.type === 'response.output_item.done' &&
+        event.item?.type === 'image_generation_call'
+      ) {
+        if (event.item.result) imageBase64 = event.item.result
+        revisedPrompt = event.item.revised_prompt ?? revisedPrompt
+      }
+    } catch {
+      // Ignore keepalive and partial parse noise.
+    }
+  }
+
+  const parser = createParser({
+    onEvent: processSseMessage,
+  })
+
+  const decoder = new TextDecoder()
+
+  for await (const chunk of response.body) {
+    parser.feed(decoder.decode(chunk, { stream: true }))
+  }
+  parser.feed(decoder.decode())
+
+  if (!imageBase64) {
+    console.error(pc.red('No images generated.'))
+    process.exit(1)
+  }
+
+  const imageBytes = Buffer.from(imageBase64, 'base64')
+  const mediaType = 'image/png'
+
+  if (stdout) {
+    process.stdout.write(imageBytes)
+    return
+  }
+
+  const savedFiles: string[] = []
+  const filePath = ensureExtension(outputPath, extensionFromMediaType(mediaType))
+  fs.writeFileSync(filePath, imageBytes)
+  console.error(pc.green(`Saved: ${filePath}`))
+  savedFiles.push(filePath)
+
+  if (revisedPrompt && !json) {
+    console.error(pc.dim(`Revised prompt: ${revisedPrompt}`))
+  }
+
+  if (json) {
+    const output = {
+      model,
+      files: savedFiles,
+      count: 1,
+      revisedPrompt,
     }
     console.log(JSON.stringify(output, null, 2))
   }

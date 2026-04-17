@@ -1,21 +1,36 @@
 // Credential storage for egaki.
 // Reads and writes API keys from ~/.config/egaki/credentials.json.
 // Keys are stored per-provider and injected as env vars at runtime.
+//
+// Most providers store a plain API key string. The 'chatgpt' provider stores
+// a structured ChatGptAuth object with OAuth tokens for the Codex backend flow.
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import type { ChatGptAuth } from './chatgpt-auth.js'
+
+export type ProviderInfo = {
+  envVar: string
+  label: string
+  hint: string
+  /** If true, this provider uses OAuth instead of a plain API key */
+  oauth?: boolean
+}
 
 // Maps provider names to their expected env var names.
 // When a key is stored, we set the corresponding env var before
 // calling the AI SDK so the provider picks it up automatically.
-export const PROVIDERS: Record<
-  string,
-  { envVar: string; label: string; hint: string }
-> = {
+export const PROVIDERS: Record<string, ProviderInfo> = {
   egaki: {
     envVar: 'EGAKI_API_KEY',
     label: 'Egaki (all models, one subscription)',
     hint: 'Subscribe at https://egaki.org/buy or run: egaki subscribe',
+  },
+  chatgpt: {
+    envVar: 'OPENAI_API_KEY',
+    label: 'ChatGPT (use your subscription)',
+    hint: 'Sign in with your ChatGPT account via browser',
+    oauth: true,
   },
   google: {
     envVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
@@ -29,7 +44,7 @@ export const PROVIDERS: Record<
   },
   openai: {
     envVar: 'OPENAI_API_KEY',
-    label: 'OpenAI (DALL-E)',
+    label: 'OpenAI (API key)',
     hint: 'Get your key at https://platform.openai.com/api-keys',
   },
   replicate: {
@@ -57,7 +72,9 @@ function getCredentialsPath(): string {
   return path.join(getConfigDir(), 'credentials.json')
 }
 
-export type Credentials = Record<string, string>
+/** A credential value is either a plain API key string or a ChatGPT OAuth object. */
+export type CredentialValue = string | ChatGptAuth
+export type Credentials = Record<string, CredentialValue>
 
 export function readCredentials(): Credentials {
   const filePath = getCredentialsPath()
@@ -83,6 +100,21 @@ export function saveProviderKey(provider: string, key: string): void {
   writeCredentials(creds)
 }
 
+export function saveChatGptAuth(auth: ChatGptAuth): void {
+  const creds = readCredentials()
+  creds['chatgpt'] = auth
+  writeCredentials(creds)
+}
+
+export function getChatGptAuth(): ChatGptAuth | undefined {
+  const creds = readCredentials()
+  const val = creds['chatgpt']
+  if (val && typeof val === 'object') {
+    return val
+  }
+  return undefined
+}
+
 export function removeProviderKey(provider: string): void {
   const creds = readCredentials()
   delete creds[provider]
@@ -91,35 +123,56 @@ export function removeProviderKey(provider: string): void {
 
 export function getProviderKey(provider: string): string | undefined {
   const creds = readCredentials()
-  return creds[provider]
+  const val = creds[provider]
+  return typeof val === 'string' ? val : undefined
 }
 
-// Inject all stored credentials as env vars so the AI SDK
-// providers pick them up automatically. Env vars already set
-// by the user take precedence (we don't overwrite them).
+// Inject all stored non-ChatGPT credentials as env vars so the AI SDK
+// providers pick them up automatically. Env vars already set by the user take
+// precedence (we don't overwrite them).
 export function injectCredentialsToEnv(): void {
   const creds = readCredentials()
-  for (const [provider, key] of Object.entries(creds)) {
+  for (const [provider, value] of Object.entries(creds)) {
     const info = PROVIDERS[provider]
-    if (!info) {
-      continue
-    }
-    if (!process.env[info.envVar]) {
-      process.env[info.envVar] = key
+    if (!info) continue
+
+    // Skip ChatGPT OAuth entries — handled separately
+    if (provider === 'chatgpt') continue
+
+    if (typeof value === 'string' && !process.env[info.envVar]) {
+      process.env[info.envVar] = value
     }
   }
+}
+
+/**
+ * Returns true when the current run should use the ChatGPT/Codex backend flow
+ * for OpenAI image models instead of a direct OpenAI API key.
+ */
+export function shouldUseChatGptBackend(): boolean {
+  return !process.env['OPENAI_API_KEY'] && Boolean(getChatGptAuth())
 }
 
 // Check if a provider has a key available (from env or stored credentials).
 // Returns the source of the key for display purposes.
 export function getKeyStatus(provider: string): {
   available: boolean
-  source: 'env' | 'stored' | 'none'
+  source: 'env' | 'stored' | 'oauth' | 'none'
 } {
   const info = PROVIDERS[provider]
   if (!info) {
     return { available: false, source: 'none' }
   }
+
+  // ChatGPT OAuth is a special case
+  if (provider === 'chatgpt') {
+    const auth = getChatGptAuth()
+    if (auth) {
+      return { available: true, source: 'oauth' }
+    }
+    return { available: false, source: 'none' }
+  }
+
   if (process.env[info.envVar]) {
     return { available: true, source: 'env' }
   }

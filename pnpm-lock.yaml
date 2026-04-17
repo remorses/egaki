@@ -29,6 +29,9 @@ importers:
       ai:
         specifier: 6.0.103
         version: 6.0.103(zod@4.3.6)
+      eventsource-parser:
+        specifier: ^3.0.6
+        version: 3.0.6
       goke:
         specifier: ^6.6.1
         version: 6.6.1

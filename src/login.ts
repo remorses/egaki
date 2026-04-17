@@ -1,6 +1,7 @@
 // Login command — interactive and non-interactive API key management.
 // Interactive mode uses clack prompts for provider selection and key input.
 // Non-interactive mode supports --provider + --key flags and stdin piping.
+// ChatGPT OAuth uses a browser flow instead of pasting a key.
 import {
   intro,
   outro,
@@ -17,8 +18,10 @@ import {
   saveProviderKey,
   removeProviderKey,
   getKeyStatus,
-  readCredentials,
+  getChatGptAuth,
+  saveChatGptAuth,
 } from './credentials.js'
+import { chatGptOAuthLogin, extractPlanType } from './chatgpt-auth.js'
 
 export async function loginInteractive(): Promise<void> {
   intro(pc.bold('egaki login'))
@@ -31,6 +34,11 @@ export async function loginInteractive(): Promise<void> {
       }
       if (status.source === 'stored') {
         return pc.green('(saved)')
+      }
+      if (status.source === 'oauth') {
+        const auth = getChatGptAuth()
+        const email = auth?.email
+        return pc.green(`(signed in${email ? ` as ${email}` : ''})`)
       }
       return pc.dim('(not configured)')
     })()
@@ -59,6 +67,14 @@ export async function loginInteractive(): Promise<void> {
   if (!info) {
     log.error(`Unknown provider: ${provider}`)
     process.exit(1)
+  }
+
+  // ChatGPT uses browser OAuth instead of key paste
+  if (provider === 'chatgpt') {
+    const auth = await chatGptOAuthLogin()
+    saveChatGptAuth(auth)
+    outro('Done — ChatGPT OAuth saved')
+    return
   }
 
   log.info(
@@ -91,13 +107,13 @@ export async function loginInteractive(): Promise<void> {
   outro('Done')
 }
 
-export function loginNonInteractive({
+export async function loginNonInteractive({
   provider,
   key,
 }: {
   provider: string
   key: string
-}): void {
+}): Promise<void> {
   const info = PROVIDERS[provider]
   if (!info) {
     const available = Object.keys(PROVIDERS).join(', ')
@@ -105,6 +121,14 @@ export function loginNonInteractive({
       pc.red(`Unknown provider: ${provider}. Available: ${available}`),
     )
     process.exit(1)
+  }
+
+  // ChatGPT uses browser OAuth — key flag is not needed
+  if (provider === 'chatgpt') {
+    const auth = await chatGptOAuthLogin()
+    saveChatGptAuth(auth)
+    console.log(pc.green('ChatGPT OAuth saved'))
+    return
   }
 
   if (!key || key.trim().length === 0) {
@@ -121,6 +145,26 @@ export function showLoginStatus(): void {
 
   for (const [key, info] of Object.entries(PROVIDERS)) {
     const status = getKeyStatus(key)
+
+    if (key === 'chatgpt') {
+      const auth = getChatGptAuth()
+      if (auth) {
+        const plan = extractPlanType(auth)
+        const email = auth.email ?? auth.accountId ?? 'unknown'
+        const expired = auth.expires < Date.now()
+        const expiryLabel = expired
+          ? pc.yellow('(token expired, will auto-refresh)')
+          : pc.dim(`(token valid)`)
+        console.log(`${pc.green('*')} ${info.label} ${pc.green('(signed in)')}`)
+        console.log(pc.dim(`  account: ${email}${plan ? `, plan: ${plan}` : ''}`))
+        console.log(`  ${expiryLabel}`)
+      } else {
+        console.log(`${pc.dim('-')} ${info.label} ${pc.dim('(not signed in)')}`)
+        console.log(pc.dim(`  run: egaki login → select ChatGPT`))
+      }
+      continue
+    }
+
     const icon = status.available ? pc.green('*') : pc.dim('-')
     const source = (() => {
       if (status.source === 'env') {
@@ -150,7 +194,8 @@ export function removeLogin(provider: string): void {
   }
 
   removeProviderKey(provider)
-  console.log(pc.green(`${info.label} key removed`))
+  const label = provider === 'chatgpt' ? 'ChatGPT OAuth' : info.label
+  console.log(pc.green(`${label} key removed`))
 }
 
 // Read API key from stdin (for piping: echo "sk-xxx" | egaki login --provider google)

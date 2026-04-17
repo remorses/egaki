@@ -17,7 +17,7 @@
 // dist/index.d.ts and add entries here.
 import type { ImageModel, LanguageModel } from 'ai'
 import pc from 'picocolors'
-import { PROVIDERS, EGAKI_GATEWAY_URL } from './credentials.js'
+import { PROVIDERS, EGAKI_GATEWAY_URL, shouldUseChatGptBackend } from './credentials.js'
 import { CATALOG, findModel } from './model-catalog.js'
 import type { ModelEntry } from './model-catalog.js'
 import { VIDEO_CATALOG, findVideoModel } from './video-model-catalog.js'
@@ -167,6 +167,16 @@ async function createGatewayVideoModel(modelId: string, provider: string) {
   const bareId = stripProviderPrefix(modelId)
   const gatewayModelId = `${provider}/${bareId}`
   return gateway.video(gatewayModelId)
+}
+
+/**
+ * ChatGPT OAuth image generation goes through the Codex backend instead of the
+ * OpenAI Image API, so OpenAI image models need the custom responses path.
+ */
+export function shouldUseResponsesApi(modelId: string): boolean {
+  const config = findModel(modelId)
+  if (!config) return false
+  return config.provider === 'openai' && config.strategy === 'image' && shouldUseChatGptBackend()
 }
 
 // Lazily import the provider and create the right model instance.

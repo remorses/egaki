@@ -506,9 +506,24 @@ export const CATALOG: ModelEntry[] = [
       multipleImages: true,
     },
   },
-  // NOTE: chatgpt-image-latest exists in OpenAI's .d.ts types but it's a moving
-  // alias used by ChatGPT/Responses API, not a stable image endpoint model.
-  // Omitted until OpenAI stabilizes it as a first-class image generation target.
+  {
+    id: 'chatgpt-image-latest',
+    name: 'ChatGPT Image',
+    description:
+      'Rolling-latest alias that tracks the newest ChatGPT image model. Currently points ' +
+      'to gpt-image-1.5. Pricing may shift when the alias retargets to a newer model.',
+    released: '2026-01',
+    ...openaiImage,
+    cost: { type: 'per-image', perImage: 0.034 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: [],
+      sizes: ['1024x1024', '1536x1024', '1024x1536'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
 
   // ── Replicate ──────────────────────────────────────────────────────────
   {
