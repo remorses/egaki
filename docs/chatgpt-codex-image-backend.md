@@ -18,9 +18,11 @@ Codex source instead of guessing the payload.
 
 - OAuth uses the Codex client flow and stores ChatGPT `access` + `refresh` + `accountId`.
 - ChatGPT image requests do **not** go to `api.openai.com/v1/images`.
-- They go to `https://chatgpt.com/backend-api/codex/responses` with:
+- Direct ChatGPT OAuth goes to `https://chatgpt.com/backend-api/codex/responses` with:
   - `Authorization: Bearer <chatgpt access token>`
   - `ChatGPT-Account-ID: <workspace/account id>`
+- OpenAI-compatible proxies such as CLIProxyAPI can be used instead by routing to
+  their `/v1/responses` endpoint with a standard Bearer API key.
 - The built-in tool is still just:
 
 ```json
