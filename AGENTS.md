@@ -39,6 +39,22 @@ Append `.md` to any URL below to get clean markdown as plain text.
 
 For example: `curl https://ai-sdk.dev/docs/ai-sdk-core/image-generation.md`
 
+## ChatGPT OAuth image generation
+
+ChatGPT OAuth image generation in `egaki` mirrors the Codex backend flow, not
+the normal OpenAI Image API. See `docs/chatgpt-codex-image-backend.md` before
+changing this path.
+
+Important Codex sources:
+
+- https://github.com/openai/codex/blob/main/codex-rs/tools/src/tool_spec.rs
+- https://github.com/openai/codex/blob/main/codex-rs/protocol/src/models.rs
+- https://github.com/openai/codex/blob/main/codex-rs/core/tests/common/responses.rs
+
+The key detail: ChatGPT-auth image requests go to
+`https://chatgpt.com/backend-api/codex/responses` with the built-in
+`image_generation` tool and user `input_image` content items for image-to-image.
+
 To find more relevant docs, fetch the sitemap and grep for keywords:
 
 ```bash

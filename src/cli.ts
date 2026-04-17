@@ -314,6 +314,7 @@ cli
     const outputPath = options.output ?? 'egaki-output.png'
     const count = options.count ?? 1
     const config = getModelConfig(model)
+    const parsedAspectRatio = parseAspectRatioOption(options.aspectRatio)
 
     if (!options.stdout) {
       console.error(pc.dim(`Model: ${model}`))
@@ -338,7 +339,11 @@ cli
         prompt,
         model,
         outputPath,
+        count,
+        aspectRatio: parsedAspectRatio,
+        seed: options.seed,
         inputImages,
+        maskImage,
         json: options.json || false,
         stdout: options.stdout || false,
       })
@@ -348,7 +353,7 @@ cli
         model,
         outputPath,
         count,
-        aspectRatio: options.aspectRatio as `${number}:${number}` | undefined,
+        aspectRatio: parsedAspectRatio,
         seed: options.seed,
         inputImages,
         maskImage,
@@ -817,19 +822,47 @@ async function generateWithResponsesApi({
   prompt,
   model,
   outputPath,
+  count,
+  aspectRatio,
+  seed,
   inputImages,
+  maskImage,
   json,
   stdout,
 }: {
   prompt: string
   model: string
   outputPath: string
+  count: number
+  aspectRatio?: `${number}:${number}`
+  seed?: number
   inputImages: Uint8Array[]
+  maskImage?: Uint8Array
   json: boolean
   stdout: boolean
 }) {
-  if (inputImages.length > 0) {
-    console.error(pc.red('ChatGPT image generation with input images is not supported yet.'))
+  if (count !== 1) {
+    console.error(pc.red('ChatGPT image generation currently supports exactly one output image.'))
+    process.exit(1)
+  }
+
+  if (seed !== undefined) {
+    console.error(pc.red('ChatGPT image generation does not support --seed.'))
+    process.exit(1)
+  }
+
+  if (maskImage) {
+    console.error(pc.red('ChatGPT image generation does not support --mask yet.'))
+    process.exit(1)
+  }
+
+  const size = aspectRatio ? chatGptImageSizeFromAspectRatio(aspectRatio) : undefined
+  if (aspectRatio && !size) {
+    console.error(
+      pc.red(
+        'ChatGPT image generation only supports --aspect-ratio 1:1, 3:2, or 2:3.',
+      ),
+    )
     process.exit(1)
   }
 
@@ -849,6 +882,14 @@ async function generateWithResponsesApi({
     console.error(pc.cyan('Generating...'))
   }
 
+  const content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
+    { type: 'input_text', text: prompt },
+    ...inputImages.map((image) => ({
+      type: 'input_image' as const,
+      image_url: imageBytesToDataUrl(image),
+    })),
+  ]
+
   const response = await fetch('https://chatgpt.com/backend-api/codex/responses', {
     method: 'POST',
     headers: {
@@ -863,7 +904,7 @@ async function generateWithResponsesApi({
         {
           type: 'message',
           role: 'user',
-          content: [{ type: 'input_text', text: prompt }],
+          content,
         },
       ],
       tools: [
@@ -875,6 +916,7 @@ async function generateWithResponsesApi({
           output_format: 'png',
           output_compression: 100,
           moderation: 'auto',
+          ...(size ? { size } : {}),
         },
       ],
       tool_choice: 'auto',
@@ -1168,6 +1210,49 @@ function extensionFromMediaType(mediaType: string): string {
   return map[mediaType] || (mediaType.startsWith('video/') ? '.mp4' : '.png')
 }
 
+function inferImageMediaType(image: Uint8Array): string {
+  if (image.length >= 8 && image[0] === 0x89 && image[1] === 0x50 && image[2] === 0x4e && image[3] === 0x47) {
+    return 'image/png'
+  }
+  if (image.length >= 3 && image[0] === 0xff && image[1] === 0xd8 && image[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (
+    image.length >= 12 &&
+    image[0] === 0x52 && image[1] === 0x49 && image[2] === 0x46 && image[3] === 0x46 &&
+    image[8] === 0x57 && image[9] === 0x45 && image[10] === 0x42 && image[11] === 0x50
+  ) {
+    return 'image/webp'
+  }
+  if (
+    image.length >= 6 &&
+    image[0] === 0x47 && image[1] === 0x49 && image[2] === 0x46 && image[3] === 0x38
+  ) {
+    return 'image/gif'
+  }
+  return 'image/png'
+}
+
+function imageBytesToDataUrl(image: Uint8Array): string {
+  const mediaType = inferImageMediaType(image)
+  return `data:${mediaType};base64,${Buffer.from(image).toString('base64')}`
+}
+
+function chatGptImageSizeFromAspectRatio(
+  aspectRatio: `${number}:${number}`,
+): '1024x1024' | '1536x1024' | '1024x1536' | undefined {
+  switch (aspectRatio) {
+    case '1:1':
+      return '1024x1024'
+    case '3:2':
+      return '1536x1024'
+    case '2:3':
+      return '1024x1536'
+    default:
+      return undefined
+  }
+}
+
 function normalizeResolutionKey(input?: string): string | undefined {
   if (!input) return undefined
   const normalized = input.trim().toLowerCase()
@@ -1175,6 +1260,17 @@ function normalizeResolutionKey(input?: string): string | undefined {
   if (normalized === '1280x720') return '720p'
   if (normalized === '854x480' || normalized === '848x480') return '480p'
   return normalized
+}
+
+function isAspectRatio(input: string): input is `${number}:${number}` {
+  return /^\d+:\d+$/.test(input)
+}
+
+function parseAspectRatioOption(input?: string): `${number}:${number}` | undefined {
+  if (!input || !isAspectRatio(input)) {
+    return undefined
+  }
+  return input
 }
 
 function ensureExtension(filePath: string, ext: string): string {
