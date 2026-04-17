@@ -2,6 +2,44 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0
+
+1. **ChatGPT login for OpenAI image generation** — use your ChatGPT subscription in `egaki` without a separate OpenAI platform API key:
+
+   ```bash
+   egaki login --provider chatgpt
+   egaki image "a dreamy studio ghibli style bakery at sunrise" -m gpt-image-1.5 -o bakery.png
+   ```
+
+   OpenAI image requests authenticated this way now follow the same Codex backend flow used by ChatGPT instead of the normal Image API path.
+
+2. **ChatGPT-backed image editing** — edit existing images with OpenAI image models through the ChatGPT/Codex backend:
+
+   ```bash
+   egaki image "change the red jacket to a blue jacket" -m gpt-image-1.5 --input portrait.png -o portrait-blue.png
+   egaki image "turn this product shot into a clay render" -m gpt-image-1.5 --input product.png -o product-clay.png
+   ```
+
+   Multiple input images are supported. For this backend path, `egaki` now explicitly rejects unsupported options like `--seed`, `--mask`, and multi-image output instead of pretending they work.
+
+3. **Aspect ratio support for ChatGPT image generation** — supported ChatGPT/OpenAI aspect ratios now map to the backend's real size controls:
+
+   ```bash
+   egaki image "wide landscape matte painting" -m gpt-image-1.5 --aspect-ratio 3:2 -o wide.png
+   egaki image "book cover concept art" -m gpt-image-1.5 --aspect-ratio 2:3 -o cover.png
+   ```
+
+   Supported ratios on this path are `1:1`, `3:2`, and `2:3`.
+
+4. **`egaki models` now shows login availability** — model discovery output includes whether each provider is currently usable from your configured credentials:
+
+   ```bash
+   egaki models
+   egaki models --json | jq '.[] | {id, provider, auth}'
+   ```
+
+   The output now includes `auth.available` and `auth.source` (`env`, `stored`, `oauth`, or `none`) so you can see which model families are ready to use.
+
 ## 0.3.0
 
 1. **Google Vertex AI provider** — use Google Cloud billing instead of AI Studio by

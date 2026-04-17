@@ -1,6 +1,6 @@
 {
   "name": "egaki",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "main": "./dist/cli.js",
   "types": "./dist/cli.d.ts",
