@@ -4,6 +4,20 @@
 framework for TypeScript. Commands, options, and help text are defined in `src/cli.ts`
 using goke's API. Run `egaki --help` to see everything.
 
+**Model discovery:** `egaki --help` shows commands and flags, but it does **not** list
+all valid model IDs. When you need to know which models/providers can be passed to
+`egaki image` or `egaki video`, use:
+
+```bash
+egaki models
+egaki models --json
+egaki models --type image
+egaki models --type video
+egaki models --provider openai
+```
+
+Use `egaki models --json` when an agent needs the exact model IDs in a machine-readable form.
+
 **Error handling:** This project uses [errore](https://errore.org) — Go-style error
 handling for TypeScript. Functions return `Error | T` unions instead of throwing.
 Check errors with `instanceof Error` and early-return them.

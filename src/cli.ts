@@ -25,6 +25,7 @@ import {
   PROVIDERS,
   getChatGptAuth,
   saveChatGptAuth,
+  getKeyStatus,
 } from './credentials.js'
 import {
   IMAGE_MODELS,
@@ -516,6 +517,9 @@ cli
   .action(async (options) => {
     const { CATALOG } = await import('./model-catalog.js')
     const yaml = await import('js-yaml')
+    const providerStatuses = Object.fromEntries(
+      Object.keys(PROVIDERS).map((provider) => [provider, getKeyStatus(provider)]),
+    )
 
     let models = options.type === 'video'
       ? VIDEO_CATALOG
@@ -536,6 +540,7 @@ cli
       name: m.name,
       ...(m.description ? { description: m.description } : {}),
       provider: m.provider,
+      auth: providerStatuses[m.provider] ?? { available: false, source: 'none' },
       strategy: m.strategy,
       released: m.released,
       cost: formatCatalogCost(m.cost),
