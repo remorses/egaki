@@ -28,6 +28,15 @@ egaki image "a dreamy studio ghibli style bakery at sunrise" -m gpt-image-1.5 -o
 egaki image "change the red jacket to a blue jacket" -m gpt-image-1.5 --input portrait.png -o portrait-blue.png
 ```
 
+### Quick start with CLIProxyAPI
+
+```bash
+export CLIPROXYAPI_BASE_URL=http://127.0.0.1:8317
+egaki login --provider cliproxyapi --key sk-cliproxyapi-default-key-change-me
+egaki image "a dreamy studio ghibli style bakery at sunrise" -m gpt-image-1.5 -o bakery.png
+egaki image "change the red jacket to a blue jacket" -m gpt-image-1.5 --input portrait.png -o portrait-blue.png
+```
+
 ## CLI examples
 
 ### Generate an image from text

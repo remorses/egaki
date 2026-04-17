@@ -26,6 +26,7 @@ import {
   getChatGptAuth,
   saveChatGptAuth,
   getKeyStatus,
+  shouldUseCompatibleResponsesBackend,
 } from './credentials.js'
 import {
   IMAGE_MODELS,
@@ -52,7 +53,8 @@ import {
   unsubscribe,
   showUsage,
 } from './subscription.js'
-import { getValidChatGptAuth } from './chatgpt-auth.js'
+import { getValidChatGptAuth, type ChatGptAuth } from './chatgpt-auth.js'
+import { resolveResponsesBackend } from './responses-backend.js'
 
 const cli = goke('egaki')
 
@@ -327,14 +329,16 @@ cli
       ? await readInputSource(options.mask)
       : undefined
 
-    // When using ChatGPT OAuth with OpenAI image models, route through the
-    // Responses API + imageGeneration tool instead of the Image API.
-    // The Codex OAuth client lacks the `api.model.images.request` scope.
+    // OpenAI image models may need the Responses API path instead of the Image
+    // API when auth comes from ChatGPT OAuth or an OpenAI-compatible proxy.
     const useResponsesApi = config.strategy === 'image' && shouldUseResponsesApi(model)
 
     if (useResponsesApi) {
       if (!options.stdout) {
-        console.error(pc.dim('Mode: Responses API (ChatGPT OAuth)'))
+        const modeLabel = shouldUseCompatibleResponsesBackend()
+          ? 'Mode: Responses API (OpenAI-compatible proxy)'
+          : 'Mode: Responses API (ChatGPT OAuth)'
+        console.error(pc.dim(modeLabel))
       }
       await generateWithResponsesApi({
         prompt,
@@ -821,8 +825,9 @@ async function generateWithTextModel({
   }
 }
 
-// Generate using the OpenAI Responses API with imageGeneration tool.
-// Used when auth comes from ChatGPT OAuth (no Image API scope).
+// Generate using the OpenAI Responses API with the image_generation tool.
+// This is used for direct ChatGPT OAuth and OpenAI-compatible proxy backends
+// such as CLIProxyAPI because both routes speak the same Responses contract.
 async function generateWithResponsesApi({
   prompt,
   model,
@@ -871,20 +876,26 @@ async function generateWithResponsesApi({
     process.exit(1)
   }
 
-  const storedAuth = getChatGptAuth()
-  if (!storedAuth?.accountId) {
-    console.error(pc.red('Missing ChatGPT account metadata. Please run `egaki login --provider chatgpt` again.'))
-    process.exit(1)
+  let auth: ChatGptAuth | undefined
+  if (!shouldUseCompatibleResponsesBackend()) {
+    const storedAuth = getChatGptAuth()
+    if (!storedAuth?.accountId) {
+      console.error(pc.red('Missing ChatGPT account metadata. Please run `egaki login --provider chatgpt` again.'))
+      process.exit(1)
+    }
+
+    const validatedAuth = await getValidChatGptAuth(storedAuth, saveChatGptAuth)
+    if (validatedAuth instanceof Error) {
+      console.error(pc.red(validatedAuth.message))
+      process.exit(1)
+    }
+    auth = validatedAuth
   }
 
-  const auth = await getValidChatGptAuth(storedAuth, saveChatGptAuth)
-  if (auth instanceof Error) {
-    console.error(pc.red(auth.message))
-    process.exit(1)
-  }
+  const backend = resolveResponsesBackend(auth)
 
   if (!stdout) {
-    console.error(pc.cyan('Generating...'))
+    console.error(pc.cyan(`Generating via ${backend.label}...`))
   }
 
   const content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
@@ -895,13 +906,9 @@ async function generateWithResponsesApi({
     })),
   ]
 
-  const response = await fetch('https://chatgpt.com/backend-api/codex/responses', {
+  const response = await fetch(backend.url, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${auth.access}`,
-      'ChatGPT-Account-ID': auth.accountId,
-      'Content-Type': 'application/json',
-    },
+    headers: backend.headers,
     body: JSON.stringify({
       model: 'gpt-5.4',
       instructions: 'You are Codex.',
@@ -934,7 +941,7 @@ async function generateWithResponsesApi({
 
   if (!response.ok || !response.body) {
     const body = await response.text().catch(() => '')
-    console.error(pc.red(`ChatGPT image generation failed: ${response.status}`))
+    console.error(pc.red(`${backend.label} image generation failed: ${response.status}`))
     if (body) console.error(pc.dim(body))
     process.exit(1)
   }

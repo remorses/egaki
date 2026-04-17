@@ -17,7 +17,12 @@
 // dist/index.d.ts and add entries here.
 import type { ImageModel, LanguageModel } from 'ai'
 import pc from 'picocolors'
-import { PROVIDERS, EGAKI_GATEWAY_URL, shouldUseChatGptBackend } from './credentials.js'
+import {
+  PROVIDERS,
+  EGAKI_GATEWAY_URL,
+  shouldUseChatGptBackend,
+  shouldUseCompatibleResponsesBackend,
+} from './credentials.js'
 import { CATALOG, findModel } from './model-catalog.js'
 import type { ModelEntry } from './model-catalog.js'
 import { VIDEO_CATALOG, findVideoModel } from './video-model-catalog.js'
@@ -176,7 +181,11 @@ async function createGatewayVideoModel(modelId: string, provider: string) {
 export function shouldUseResponsesApi(modelId: string): boolean {
   const config = findModel(modelId)
   if (!config) return false
-  return config.provider === 'openai' && config.strategy === 'image' && shouldUseChatGptBackend()
+  return (
+    config.provider === 'openai' &&
+    config.strategy === 'image' &&
+    (shouldUseChatGptBackend() || shouldUseCompatibleResponsesBackend())
+  )
 }
 
 // Lazily import the provider and create the right model instance.

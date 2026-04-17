@@ -32,6 +32,11 @@ export const PROVIDERS: Record<string, ProviderInfo> = {
     hint: 'Sign in with your ChatGPT account via browser',
     oauth: true,
   },
+  cliproxyapi: {
+    envVar: 'CLIPROXYAPI_API_KEY',
+    label: 'CLIProxyAPI (OpenAI-compatible proxy)',
+    hint: 'Set CLIPROXYAPI_BASE_URL and save your proxy API key',
+  },
   google: {
     envVar: 'GOOGLE_GENERATIVE_AI_API_KEY',
     label: 'Google AI (Gemini, Imagen)',
@@ -151,6 +156,16 @@ export function injectCredentialsToEnv(): void {
  */
 export function shouldUseChatGptBackend(): boolean {
   return !process.env['OPENAI_API_KEY'] && Boolean(getChatGptAuth())
+}
+
+// OpenAI image generation can also run through an OpenAI-compatible Responses
+// backend such as CLIProxyAPI. This path uses an API key + base URL instead of
+// direct ChatGPT OAuth headers.
+export function shouldUseCompatibleResponsesBackend(): boolean {
+  const proxyBaseUrl = process.env['CLIPROXYAPI_BASE_URL']?.trim()
+  const openAiBaseUrl = process.env['OPENAI_BASE_URL']?.trim()
+  const apiKey = process.env['CLIPROXYAPI_API_KEY']?.trim() || process.env['OPENAI_API_KEY']?.trim()
+  return Boolean(apiKey && (proxyBaseUrl || openAiBaseUrl))
 }
 
 // Check if a provider has a key available (from env or stored credentials).
