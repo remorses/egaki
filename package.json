@@ -40,6 +40,7 @@
   "scripts": {
     "dev": "tsx src/cli.ts",
     "build": "tsc && chmod +x dist/cli.js",
+    "test": "tsx --test tests/**/*.test.ts",
     "prepublishOnly": "pnpm build"
   },
   "keywords": [
