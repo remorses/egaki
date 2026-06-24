@@ -33,6 +33,7 @@
   ],
   "exclude": [
     "dist",
-    "src/vite/motion-timing.ts"
+    "src/vite/motion-timing.ts",
+    "src/vite/unframer-timing.ts"
   ]
 }

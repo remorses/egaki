@@ -1,0 +1,29 @@
+{
+  "name": "unframer-example",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "framer": "unframer 6c271c19087d5caf --outDir src/framer"
+  },
+  "dependencies": {
+    "@motionone/dom": "^10.18.0",
+    "@remotion/player": "4.0.475",
+    "egaki": "workspace:^",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.475",
+    "spiceflow": "1.26.0-rsc.5",
+    "unframer": "4.1.9"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.17",
+    "@vitejs/plugin-react": "^6.0.2",
+    "motion": "^12.40.0",
+    "motion-dom": "^12.40.0",
+    "motion-utils": "^12.39.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.10"
+  }
+}

@@ -14,6 +14,7 @@
 import React from 'react'
 import { renderStillOnWeb, renderMediaOnWeb } from '@remotion/web-renderer'
 import { ExportContext } from './mdx-video.tsx'
+import { useCurrentFrame, useDelayRender } from 'remotion'
 import type {
   FrameRange,
   RenderStillOnWebImageFormat,
@@ -175,6 +176,57 @@ function triggerDownload(blob: Blob, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+async function waitForImagesReady() {
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+  const images = Array.from(document.images).filter((img) => img.isConnected && img.currentSrc)
+
+  await Promise.all(images.map(async (img) => {
+    img.loading = 'eager'
+    img.decoding = 'sync'
+
+    if (!img.complete) {
+      await new Promise<void>((resolve) => {
+        const done = () => {
+          img.removeEventListener('load', done)
+          img.removeEventListener('error', done)
+          resolve()
+        }
+        img.addEventListener('load', done, { once: true })
+        img.addEventListener('error', done, { once: true })
+      })
+    }
+
+    await img.decode().catch(() => {})
+  }))
+
+  await document.fonts.ready.catch(() => {})
+
+  await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+}
+
+function ImageReadinessGate() {
+  const frame = useCurrentFrame()
+  const { delayRender, continueRender } = useDelayRender()
+
+  React.useLayoutEffect(() => {
+    const handle = delayRender(`Waiting for images at frame ${frame}`, {
+      timeoutInMilliseconds: 10 * 60 * 1000,
+    })
+    let continued = false
+    const done = () => {
+      if (continued) return
+      continued = true
+      continueRender(handle)
+    }
+
+    waitForImagesReady().then(done, done)
+    return done
+  }, [continueRender, delayRender, frame])
+
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -340,6 +392,7 @@ class EgakiSDK {
   private wrapForExport(component: React.FC): React.FC {
     const Wrapped: React.FC = () =>
       React.createElement(ExportContext.Provider, { value: true },
+        React.createElement(ImageReadinessGate),
         React.createElement(component))
     return Wrapped
   }

@@ -164,7 +164,19 @@ if (!registry.patched) {
   // Patch finish(): hold at end instead of teardown so backward seeking
   // works. Also stops the driver to prevent resource leaks (the animation
   // stays seekable via sample() without a running driver).
+  //
+  // IMPORTANT: 0-duration animations (calculatedDuration === 0) must finish
+  // normally via the original finish(). These are instant variant snaps
+  // (initial→animate commits, layout property resets) that framer-motion's
+  // VisualElement uses to flush final styles. Holding them prevents cleanup
+  // of the internal active-animation queue, which blocks the VisualElement
+  // from committing styles to DOM — causing subsequent sections to render
+  // blank (all opacity/transform stuck at initial values).
+  const origFinish = JSAnimation.prototype.finish
   JSAnimation.prototype.finish = function (this: AnimInstance) {
+    if (!this.calculatedDuration) {
+      return origFinish.call(this)
+    }
     this.state = 'finished'
     this.holdTime = this.calculatedDuration
     if (this.driver?.stop) {

@@ -19,7 +19,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { mdxParse } from 'safe-mdx/parse'
 import { collectServerImportSources } from './server-mdx.ts'
-import { parseFrontmatter } from './mdx-parse.ts'
+import { parseFrontmatter, type VideoFrontmatter } from './mdx-parse.ts'
 
 // Resolve the package src/ directory from this file's location.
 // Used for resolve.alias so the RSC module runner can resolve relative
@@ -117,6 +117,10 @@ export function video(options: VideoPluginOptions): PluginOption[] {
   let entryPath: string
   /** Whether the user's project has `motion` (framer-motion) installed. */
   let hasMotion = false
+  /** Whether the user's project has `unframer` installed.
+   *  When true, unframer-timing.ts patches unframer's bundled
+   *  framer-motion internals so animations sync with Remotion. */
+  let hasUnframer = false
   /** Cached previous MDX source for section-level diff detection. */
   let previousMdxSource: string | null = null
 
@@ -175,6 +179,17 @@ export function video(options: VideoPluginOptions): PluginOption[] {
       } catch {
         hasMotion = false
       }
+
+      // Detect if the user has `unframer` installed. Unframer bundles its
+      // own copy of framer-motion, so egaki needs a separate timing patch
+      // for those internals. Otherwise animations run on rAF instead of
+      // Remotion's frame clock during export.
+      try {
+        createRequire(root + '/').resolve('unframer')
+        hasUnframer = true
+      } catch {
+        hasUnframer = false
+      }
     },
 
     resolveId(id) {
@@ -195,7 +210,7 @@ export function video(options: VideoPluginOptions): PluginOption[] {
         // components (GeneratedImage, GeneratedVideo) can derive the best
         // aspect ratio per-model from the catalog's supported ratios.
         const mdxContent = fs.readFileSync(entryPath, 'utf-8')
-        let fm: ReturnType<typeof parseFrontmatter>
+        let fm: VideoFrontmatter
         try {
           fm = parseFrontmatter(mdxParse(mdxContent))
         } catch (e) {
@@ -272,8 +287,17 @@ export function video(options: VideoPluginOptions): PluginOption[] {
         const motionTimingPath = path.join(__srcDir, 'motion-timing.ts').replace(/\\/g, '/')
         const motionImport = hasMotion ? [`import ${JSON.stringify(motionTimingPath)}`] : []
 
+        // When unframer is installed, also import unframer-timing.ts which
+        // patches unframer's bundled framer-motion internals (JSAnimation,
+        // MotionGlobalConfig, frameData) with the same timing hooks.
+        // Without this, unframer animations run on rAF and don't sync
+        // with Remotion's frame clock, causing slow/stuck export.
+        const unframerTimingPath = path.join(__srcDir, 'unframer-timing.ts').replace(/\\/g, '/')
+        const unframerImport = hasUnframer ? [`import ${JSON.stringify(unframerTimingPath)}`] : []
+
         return [
           ...motionImport,
+          ...unframerImport,
           ...imports,
           `export const eagerModules = {`,
           entries.join(',\n'),
@@ -290,6 +314,37 @@ export function video(options: VideoPluginOptions): PluginOption[] {
           `export { app }`,
         ].join('\n')
       }
+    },
+
+    configureServer(server) {
+      server.middlewares.use('/__egaki_asset', async (req, res) => {
+        try {
+          const requestUrl = new URL(req.url ?? '', 'http://localhost')
+          const assetUrl = requestUrl.searchParams.get('url')
+          if (!assetUrl) {
+            res.statusCode = 400
+            res.end('Missing url')
+            return
+          }
+          const upstream = await fetch(assetUrl)
+          if (!upstream.ok || !upstream.body) {
+            res.statusCode = upstream.status
+            res.end(await upstream.text())
+            return
+          }
+          res.statusCode = upstream.status
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          const contentType = upstream.headers.get('content-type')
+          if (contentType) res.setHeader('Content-Type', contentType)
+          const cacheControl = upstream.headers.get('cache-control')
+          if (cacheControl) res.setHeader('Cache-Control', cacheControl)
+          const bytes = new Uint8Array(await upstream.arrayBuffer())
+          res.end(bytes)
+        } catch (error) {
+          res.statusCode = 500
+          res.end(error instanceof Error ? error.message : 'Failed to proxy asset')
+        }
+      })
     },
 
     // HMR for file changes in the project.
@@ -442,8 +497,8 @@ export function video(options: VideoPluginOptions): PluginOption[] {
       // runs before configResolved where hasMotion is set. Harmless when
       // motion isn't installed — dedupe on missing packages is a no-op.
       config.resolve.dedupe = mergeUnique(
-        config.resolve.dedupe as string[] | undefined,
-        ['motion', 'motion-dom', 'motion-utils'],
+        config.resolve.dedupe,
+        ['motion', 'motion-dom', 'motion-utils', 'unframer'],
       )
 
       if (name === 'client') {
