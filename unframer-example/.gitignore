@@ -1,0 +1,12 @@
+
+node_modules
+dist
+src/framer
+.DS_Store
+.env
+.env.*
+.stackblitzrc
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
