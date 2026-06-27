@@ -379,7 +379,14 @@ function VideoComposition({
   preamble?: ReactNode
 }) {
   return (
-    <AbsoluteFill style={{ background: '#050505', fontSize: 60 }}>
+    <AbsoluteFill
+      style={{
+        background: '#050505',
+        fontSize: 60,
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+      }}
+    >
       {/* Preamble: MDX content before the first heading. Rendered at
           composition level so it persists across all sections. Runs in the
           background behind the Series (earlier DOM order = behind). */}
