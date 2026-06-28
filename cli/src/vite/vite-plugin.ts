@@ -1,11 +1,14 @@
 /**
  * Vite plugin for the video framework.
  *
- * Accepts a single MDX entry file, generates virtual modules for the
- * spiceflow app entry, and auto-injects spiceflow + react plugins.
+ * Discovers MDX files in the project root and serves each as a page route.
+ * The default entry (video.mdx or index.mdx) is served at /; others at
+ * /<relative-path-without-extension>. Auto-injects spiceflow + react plugins.
  *
  * Usage in vite.config.ts:
  *   import { video } from 'egaki/vite'
+ *   export default defineConfig({ plugins: [video()] })
+ *   // or with explicit default entry:
  *   export default defineConfig({ plugins: [video({ entry: './video.mdx' })] })
  */
 
@@ -41,8 +44,10 @@ const RESOLVED_MODULES = '\0' + VIRTUAL_MODULES
 const PKG_NAME = 'egaki'
 
 export interface VideoPluginOptions {
-  /** Path to the MDX entry file (relative to vite root or absolute) */
-  entry: string
+  /** Path to the default MDX entry file (relative to vite root or absolute).
+   *  When omitted, auto-discovers: video.mdx > index.mdx > first .mdx found.
+   *  All other .mdx files in the project become additional routes. */
+  entry?: string
 }
 
 /** Resolve a relative MDX import source against the project root,
@@ -112,21 +117,63 @@ export function findChangedSectionIndex(oldSource: string, newSource: string): n
   }
 }
 
-export function video(options: VideoPluginOptions): PluginOption[] {
+/** Discover .mdx files in the project root directory (non-recursive).
+ *  Only root-level files become entries to avoid import resolution issues
+ *  with nested paths. Returns a map of routePath → absolutePath. */
+function discoverMdxEntries(root: string): Map<string, string> {
+  const entries = new Map<string, string>()
+  if (!fs.existsSync(root)) return entries
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.isDirectory()) continue
+    if (!/\.mdx$/.test(entry.name)) continue
+    const fullPath = path.join(root, entry.name)
+    const routePath = entry.name.replace(/\.mdx$/, '')
+    entries.set(routePath, fullPath.replace(/\\/g, '/'))
+  }
+  return entries
+}
+
+/** Pick the default entry route from discovered entries.
+ *  Priority: explicit option > video.mdx > index.mdx > first alphabetically. */
+function resolveDefaultRoute(entries: Map<string, string>, explicitEntry?: string, root?: string): string {
+  if (explicitEntry && root) {
+    const absEntry = path.isAbsolute(explicitEntry)
+      ? explicitEntry.replace(/\\/g, '/')
+      : path.resolve(root, explicitEntry).replace(/\\/g, '/')
+    for (const [route, absPath] of entries) {
+      if (absPath === absEntry) return route
+    }
+  }
+  if (entries.has('video')) return 'video'
+  if (entries.has('index')) return 'index'
+  // First alphabetically
+  const sorted = [...entries.keys()].sort()
+  return sorted[0] ?? 'video'
+}
+
+export function video(options?: VideoPluginOptions): PluginOption[] {
   let root: string
-  let entryPath: string
+  /** All discovered MDX entry files: routePath → absolutePath */
+  let mdxEntries: Map<string, string> = new Map()
+  /** Route path of the default entry (served at /) */
+  let defaultRoute: string = ''
   /** Whether the user's project has `motion` (framer-motion) installed. */
   let hasMotion = false
-  /** Cached previous MDX source for section-level diff detection. */
-  let previousMdxSource: string | null = null
+  /** Cached previous MDX sources for section-level diff detection, keyed by abs path. */
+  const previousMdxSources: Map<string, string> = new Map()
+  /** Set of absolute paths of all entry MDX files for quick lookup. */
+  let entryPathSet: Set<string> = new Set()
 
-  /** Is this file referenced inside a <Server> block of the entry MDX?
+  /** Is this file referenced inside a <Server> block of any entry MDX?
    *  Parsed on demand (no cache — file changes are rare and parsing is
    *  milliseconds). Used to decide which edits need an rsc:update. */
   const isServerImportedFile = (file: string): boolean => {
     try {
-      const sources = collectServerImportSources(mdxParse(fs.readFileSync(entryPath, 'utf-8')))
-      return sources.some((source) => resolveSourceToFile(root, source) === file)
+      for (const absPath of entryPathSet) {
+        const sources = collectServerImportSources(mdxParse(fs.readFileSync(absPath, 'utf-8')))
+        if (sources.some((source) => resolveSourceToFile(root, source) === file)) return true
+      }
+      return false
     } catch {
       return false
     }
@@ -137,20 +184,44 @@ export function video(options: VideoPluginOptions): PluginOption[] {
 
     configResolved(config) {
       root = config.root
-      entryPath = path.isAbsolute(options.entry)
-        ? options.entry
-        : path.resolve(root, options.entry)
 
-      if (!fs.existsSync(entryPath)) {
+      // Discover all MDX entries in the project root.
+      mdxEntries = discoverMdxEntries(root)
+
+      // If explicit entry is provided but not found, create a minimal entry
+      // in the map (will error below if file doesn't exist).
+      if (options?.entry) {
+        const absEntry = (path.isAbsolute(options.entry)
+          ? options.entry
+          : path.resolve(root, options.entry)).replace(/\\/g, '/')
+        if (!fs.existsSync(absEntry)) {
+          throw new Error(
+            `[egaki] entry file not found: ${absEntry}\n` +
+            `Set entry to a path relative to the vite root.`,
+          )
+        }
+        // Ensure explicit entry is in the map
+        const relPath = path.relative(root, absEntry).replace(/\\/g, '/')
+        const routePath = relPath.replace(/\.mdx$/, '')
+        mdxEntries.set(routePath, absEntry)
+      }
+
+      if (mdxEntries.size === 0) {
         throw new Error(
-          `[egaki] entry file not found: ${entryPath}\n` +
-          `Set entry to a path relative to the vite root.`,
+          `[egaki] no .mdx files found in ${root}\n` +
+          `Create a video.mdx file or set entry explicitly.`,
         )
       }
 
-      // Seed the previous source so the first edit has a baseline for
-      // section-level diff detection.
-      previousMdxSource = fs.readFileSync(entryPath, 'utf-8')
+      defaultRoute = resolveDefaultRoute(mdxEntries, options?.entry, root)
+      entryPathSet = new Set(mdxEntries.values())
+
+      // Seed previous sources for section-level diff detection.
+      for (const [, absPath] of mdxEntries) {
+        try {
+          previousMdxSources.set(absPath, fs.readFileSync(absPath, 'utf-8'))
+        } catch { /* ignore read errors */ }
+      }
 
       // Auto-generate egaki-env.d.ts so MDX LSP knows about built-in
       // components via the global MDXProvidedComponents type. Same
@@ -185,35 +256,47 @@ export function video(options: VideoPluginOptions): PluginOption[] {
 
     load(id) {
       if (id === RESOLVED_MDX) {
-        // Import the user's MDX file as a raw string.
-        // Vite's ?raw handles HMR automatically.
-        // Use absolute path so the virtual module resolves correctly.
-        // projectRoot lets app.tsx resolve relative MDX import sources
-        // for dynamic <Server> slot imports.
-        const absEntry = entryPath.replace(/\\/g, '/')
-        // Parse frontmatter to expose composition dimensions so server
-        // components (GeneratedImage, GeneratedVideo) can derive the best
-        // aspect ratio per-model from the catalog's supported ratios.
-        const mdxContent = fs.readFileSync(entryPath, 'utf-8')
+        // Import all entry MDX files as raw strings (?raw for HMR tracking).
+        // Export an entries map so app.tsx can serve each at its route.
+        const defaultAbsPath = mdxEntries.get(defaultRoute)!
+        // Parse frontmatter from the default entry for composition dimensions.
         let fm: ReturnType<typeof parseFrontmatter>
         try {
+          const mdxContent = fs.readFileSync(defaultAbsPath, 'utf-8')
           fm = parseFrontmatter(mdxParse(mdxContent))
         } catch (e) {
-          // Syntax error in MDX — use default frontmatter so the virtual
-          // module still loads. The client handles the real parse error
-          // with its own recovery (last-good cache + error overlay).
           console.error('[egaki] frontmatter parse error:', e)
           fm = { fps: 30, bpm: 120, width: 1920, height: 1080, scale: 1 }
         }
         const folderName = path.basename(root)
+
+        const imports: string[] = []
+        const entriesObj: string[] = []
+        const pathsObj: string[] = []
+        let i = 0
+        for (const [routePath, absPath] of mdxEntries) {
+          const varName = `__entry${i++}`
+          imports.push(`import ${varName} from ${JSON.stringify(absPath + '?raw')}`)
+          entriesObj.push(`  ${JSON.stringify(routePath)}: ${varName}`)
+          pathsObj.push(`  ${JSON.stringify(routePath)}: ${JSON.stringify(absPath)}`)
+        }
+
         return [
-          `import mdx from ${JSON.stringify(absEntry + '?raw')}`,
-          `export default mdx`,
+          ...imports,
+          `export const entries = {`,
+          entriesObj.join(',\n'),
+          `}`,
+          `export const entryPaths = {`,
+          pathsObj.join(',\n'),
+          `}`,
+          `export const defaultRoute = ${JSON.stringify(defaultRoute)}`,
           `export const projectRoot = ${JSON.stringify(root.replace(/\\/g, '/'))}`,
-          `export const entryPath = ${JSON.stringify(absEntry)}`,
           `export const compositionWidth = ${fm.width}`,
           `export const compositionHeight = ${fm.height}`,
           `export const folderName = ${JSON.stringify(folderName)}`,
+          // Backward compat: default export is the default entry source
+          `export default entries[${JSON.stringify(defaultRoute)}]`,
+          `export const entryPath = entryPaths[${JSON.stringify(defaultRoute)}]`,
         ].join('\n')
       }
 
@@ -238,8 +321,9 @@ export function video(options: VideoPluginOptions): PluginOption[] {
             if (entry.isDirectory()) {
               walkDir(fullPath)
             } else if (/\.(tsx?|jsx?|mdx?)$/.test(entry.name) && !/\.(test|spec|config)\./.test(entry.name)) {
-              // Skip the main entry file to avoid circular imports
-              if (fullPath === entryPath) continue
+              // Entry MDX files are NOT skipped: they may be imported as
+              // partials by other MDX files (e.g. `import Intro from './intro.mdx'`).
+              // Self-import is a user error and harmless (safe-mdx handles it).
               if (/\.server\.[jt]sx?$/.test(entry.name)) continue
               const isMdx = /\.mdx?$/.test(entry.name)
               const relPath = './' + path.relative(root, fullPath).replace(/\\/g, '/')
@@ -309,9 +393,10 @@ export function video(options: VideoPluginOptions): PluginOption[] {
     // File create/delete: the generated module list changed and no accept
     // chain exists for new files, so invalidate everything + full reload.
     hotUpdate(ctx) {
-      const isEntryMdx = ctx.file === entryPath
+      const normalizedFile = ctx.file.replace(/\\/g, '/')
+      const isEntryMdx = entryPathSet.has(normalizedFile)
       const isImportedMdx = /\.mdx?$/.test(ctx.file)
-        && ctx.file !== entryPath
+        && !isEntryMdx
         && !ctx.file.includes('node_modules')
         && ctx.file.startsWith(root)
       const isUserFile = /\.[jt]sx?$/.test(ctx.file)
@@ -334,8 +419,32 @@ export function video(options: VideoPluginOptions): PluginOption[] {
         }
       }
 
-      // Create/delete: regenerate module list, full reload.
+      // Create/delete: regenerate module list and entry map, full reload.
       if (ctx.type !== 'update') {
+        // Re-discover entries in case a new MDX file was added or removed.
+        mdxEntries = discoverMdxEntries(root)
+        if (options?.entry) {
+          const absEntry = (path.isAbsolute(options.entry)
+            ? options.entry
+            : path.resolve(root, options.entry)).replace(/\\/g, '/')
+          const relPath = path.relative(root, absEntry).replace(/\\/g, '/')
+          mdxEntries.set(relPath.replace(/\.mdx$/, ''), absEntry)
+        }
+        defaultRoute = resolveDefaultRoute(mdxEntries, options?.entry, root)
+        const nextEntryPathSet = new Set(mdxEntries.values())
+
+        // Sync previousMdxSources: seed new entries, prune removed ones.
+        for (const file of previousMdxSources.keys()) {
+          if (!nextEntryPathSet.has(file)) previousMdxSources.delete(file)
+        }
+        for (const file of nextEntryPathSet) {
+          if (!previousMdxSources.has(file)) {
+            try { previousMdxSources.set(file, fs.readFileSync(file, 'utf-8')) }
+            catch { /* file may be mid-write */ }
+          }
+        }
+        entryPathSet = nextEntryPathSet
+
         invalidateVirtual([RESOLVED_APP, RESOLVED_MDX, RESOLVED_MODULES])
         if (this.environment.name === 'client') {
           ctx.server.environments.client?.hot.send({ type: 'full-reload' })
@@ -346,39 +455,25 @@ export function video(options: VideoPluginOptions): PluginOption[] {
       if (isEntryMdx) {
         invalidateVirtual([RESOLVED_APP, RESOLVED_MDX])
 
-        // Send rsc:update so the client re-fetches the RSC payload.
-        // Moving components in/out of <Server> needs nothing extra: the
-        // refetch re-runs app.tsx, which dynamically imports whatever the
-        // new MDX references inside <Server>.
-        //
-        // Section diff and cache update are inside the client branch so
-        // rsc/ssr environments (which also run hotUpdate) don't consume
-        // previousMdxSource first, causing the client pass to compare
-        // new-vs-new and miss the change.
         if (this.environment.name === 'client') {
-          // Detect which section changed so the client can auto-seek to it.
-          // Compare old vs new MDX raw text per section. Fast: just string
-          // slicing using mdast heading positions, no diff library.
-          const newMdxSource = fs.readFileSync(entryPath, 'utf-8')
-          const changedSection = previousMdxSource != null
-            ? findChangedSectionIndex(previousMdxSource, newMdxSource)
+          // Section-level diff detection for the changed entry.
+          const newMdxSource = fs.readFileSync(normalizedFile, 'utf-8')
+          const prevSource = previousMdxSources.get(normalizedFile)
+          const changedSection = prevSource != null
+            ? findChangedSectionIndex(prevSource, newMdxSource)
             : null
-          previousMdxSource = newMdxSource
+          previousMdxSources.set(normalizedFile, newMdxSource)
 
           ctx.server.environments.client?.hot.send({
             type: 'custom',
             event: 'rsc:update',
             data: { file: ctx.file },
           })
-          // Send scene-changed AFTER rsc:update so both events arrive in
-          // order over the WebSocket. The client stores the index in a
-          // module-level variable; a useEffect([sections]) in PlayerPage
-          // consumes it after React re-renders with fresh content.
           if (changedSection != null) {
             ctx.server.environments.client?.hot.send({
               type: 'custom',
               event: 'egaki:scene-changed',
-              data: { sectionIndex: changedSection },
+              data: { sectionIndex: changedSection, file: normalizedFile },
             })
           }
         }

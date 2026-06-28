@@ -3,12 +3,20 @@
 /// <reference types="vite/client" />
 
 declare module 'virtual:egaki-mdx' {
+  /** Default export: raw MDX source of the default entry (backward compat). */
   const mdx: string
   export default mdx
+  /** Map of all discovered MDX entries: routePath → raw MDX source string.
+   *  The default entry's key matches `defaultRoute`. */
+  export const entries: Record<string, string>
+  /** Map of all discovered MDX entries: routePath → absolute file path. */
+  export const entryPaths: Record<string, string>
+  /** Route path of the default entry (e.g. 'video' or 'index'). */
+  export const defaultRoute: string
   /** Absolute path of the vite project root, for resolving relative MDX
    *  import sources in <Server> slot rendering (app.tsx). */
   export const projectRoot: string
-  /** Absolute path of the MDX entry file. */
+  /** Absolute path of the default MDX entry file (backward compat). */
   export const entryPath: string
   /** Composition dimensions from frontmatter (default 1920×1080). */
   export const compositionWidth: number

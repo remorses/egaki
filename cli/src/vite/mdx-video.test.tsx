@@ -15,7 +15,7 @@ import type { EagerModules } from 'safe-mdx/parse'
 import { MdastToJsx } from 'safe-mdx'
 import { splitIntoSections, calculateTotalDuration, resolveAutoDurations, parseFrontmatter, aspectRatioFromDimensions } from './mdx-parse.ts'
 import { findChangedSectionIndex } from './vite-plugin.ts'
-import { computeEffectiveDuration } from './media-duration-store.ts'
+import { computeEffectiveDuration, computeRetimeRate } from './media-duration-store.ts'
 import { findServerNodes, blankServerContents, collectServerImportSources, wrapGenerateNodes, collectServerFileImportNames } from './server-mdx.ts'
 import { stableJsonKey, hashKey, promptPrefix } from './server-components.tsx'
 import { MDX_BUILTIN_COMPONENTS, springFromDuration, findSpringConfig } from './mdx-video.tsx'
@@ -1962,6 +1962,55 @@ describe('computeEffectiveDuration with gap props', () => {
 
   test('returns null when duration cannot be determined', () => {
     expect(computeEffectiveDuration({ fps: 30, gapBefore: 30 })).toBeNull()
+  })
+})
+
+describe('computeRetimeRate', () => {
+
+  test('10s media in 5s section → rate 2 (2x speed)', () => {
+    // 10s raw = 300 frames at 30fps, target = 150 frames (5s)
+    expect(computeRetimeRate({ rawSeconds: 10, fps: 30, targetFrames: 150 })).toBe(2)
+  })
+
+  test('3s media in 6s section → rate 0.5 (half speed)', () => {
+    // 3s raw = 90 frames, target = 180 frames (6s)
+    expect(computeRetimeRate({ rawSeconds: 3, fps: 30, targetFrames: 180 })).toBe(0.5)
+  })
+
+  test('media already fits → rate 1', () => {
+    expect(computeRetimeRate({ rawSeconds: 5, fps: 30, targetFrames: 150 })).toBe(1)
+  })
+
+  test('trimmed media retimes the trimmed portion', () => {
+    // trimBefore=30, trimAfter=120 → 90 media frames, target=45 → rate 2
+    expect(computeRetimeRate({ fps: 30, trimBefore: 30, trimAfter: 120, targetFrames: 45 })).toBe(2)
+  })
+
+  test('gaps are subtracted from target', () => {
+    // 3s raw = 90 frames, gapBefore=30 → available = 150-30 = 120 → rate = 90/120 = 0.75
+    expect(computeRetimeRate({ rawSeconds: 3, fps: 30, gapBefore: 30, targetFrames: 150 })).toBe(0.75)
+  })
+
+  test('both gaps subtracted', () => {
+    // 3s raw = 90 frames, gapBefore=15 + gapAfter=15 → available = 150-30 = 120 → 90/120 = 0.75
+    expect(computeRetimeRate({ rawSeconds: 3, fps: 30, gapBefore: 15, gapAfter: 15, targetFrames: 150 })).toBe(0.75)
+  })
+
+  test('returns null when raw duration unknown and no trim bounds', () => {
+    expect(computeRetimeRate({ fps: 30, targetFrames: 150 })).toBeNull()
+  })
+
+  test('returns null when gaps consume all available frames', () => {
+    expect(computeRetimeRate({ rawSeconds: 3, fps: 30, gapBefore: 150, targetFrames: 150 })).toBeNull()
+  })
+
+  test('returns null when media frames are zero', () => {
+    expect(computeRetimeRate({ fps: 30, trimBefore: 90, trimAfter: 90, targetFrames: 150 })).toBeNull()
+  })
+
+  test('works with explicit number targetFrames (retimeToFit as number)', () => {
+    // 5s raw = 150 frames, target = 300 frames → rate 0.5
+    expect(computeRetimeRate({ rawSeconds: 5, fps: 30, targetFrames: 300 })).toBe(0.5)
   })
 })
 

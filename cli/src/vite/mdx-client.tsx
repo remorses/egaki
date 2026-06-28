@@ -337,6 +337,8 @@ export function MdxClientApp({
   mdx,
   serverSlots = EMPTY_SLOTS,
   entryPath,
+  availableEntries = [],
+  currentRoute = '',
 }: {
   mdx: string
   /** Server-rendered <Server> subtrees keyed by node start line, produced
@@ -345,6 +347,10 @@ export function MdxClientApp({
   serverSlots?: ServerSlots
   /** Absolute path of the MDX entry file, for copy prompts. */
   entryPath: string
+  /** All available MDX entry route paths for navigation. */
+  availableEntries?: string[]
+  /** Current route path ('' for default entry). */
+  currentRoute?: string
 }) {
   const modules = useModules()
 
@@ -374,17 +380,25 @@ export function MdxClientApp({
 
   const { sections, totalDuration, preamble, hasUnresolvedDurations } = useMemo(() => {
     const { fps, bpm } = composed.frontmatter
-    const resolved = resolveAutoDurations(composed.sections, fps, bpm, sectionDurations)
-    // A section is "unresolved" if it had no explicit duration= AND the
-    // media duration store has no reports for it yet (still using the
-    // default placeholder). This gates the export button.
-    const hasUnresolved = composed.sections.some((s, i) =>
+
+    // MDX files without headings (e.g. imported partials rendered standalone)
+    // have 0 sections. Synthesize one from the preamble with null duration
+    // BEFORE resolving auto-durations, so media auto-sizing still works.
+    let sourceSections = composed.sections
+    let finalPreamble = composed.preamble
+    if (sourceSections.length === 0 && finalPreamble) {
+      sourceSections = [{ heading: null, durationInFrames: null, jsx: finalPreamble }]
+      finalPreamble = undefined
+    }
+
+    const resolved = resolveAutoDurations(sourceSections, fps, bpm, sectionDurations)
+    const hasUnresolved = sourceSections.some((s, i) =>
       s.durationInFrames === null && sectionDurations[String(i)] === undefined,
     )
     return {
       sections: resolved,
-      totalDuration: calculateTotalDuration(resolved),
-      preamble: composed.preamble,
+      totalDuration: Math.max(1, calculateTotalDuration(resolved)),
+      preamble: finalPreamble,
       hasUnresolvedDurations: hasUnresolved,
     }
   }, [composed, sectionDurations])
@@ -398,6 +412,8 @@ export function MdxClientApp({
         entryPath={entryPath}
         hasUnresolvedDurations={hasUnresolvedDurations}
         frontmatter={composed.frontmatter}
+        availableEntries={availableEntries}
+        currentRoute={currentRoute}
       />
     </ServerSlotsContext.Provider>
   )

@@ -1558,3 +1558,54 @@ Vitest alone is enough for isolated parsing or helper changes with no plugin/HMR
 Midjourney's CDN (`cdn.midjourney.com`) is behind Cloudflare bot protection. `curl` and other non-browser HTTP clients receive a "Just a moment..." JS challenge page instead of the actual file. Do NOT waste time trying to download these URLs with curl, wget, or fetch from Node.
 
 Instead, use the URL directly as `src` in components (`<Video>`, `<img>`, CSS `background-image`, etc.). The browser rendering the page can solve the Cloudflare challenge and load the asset at runtime.
+
+## `retimeToFit` — sync media to scene duration
+
+`<Audio>` and `<Video>` accept a `retimeToFit` prop that automatically adjusts
+`playbackRate` so the media (or its trimmed portion) fills the available time.
+Particularly useful for beat-synced compositions where each scene is a fixed
+number of beats and media needs to stretch or compress to match.
+
+- **`retimeToFit={true}`** — fit the current section's `durationInFrames`.
+- **`retimeToFit={90}`** — fit exactly 90 frames (explicit target).
+
+`gapBefore`/`gapAfter` are subtracted from the target before computing the
+rate, so the media fills only the remaining time. If the media is trimmed
+(`trimBefore`/`trimAfter`), only the trimmed portion is retimed.
+
+```mdx
+---
+fps: 30
+bpm: 120
+---
+
+# Beat 1 duration=1beat
+
+<Video src="/clip-a.mp4" retimeToFit objectFit="cover" />
+
+# Beat 2 duration=1beat
+
+<Video src="/clip-b.mp4" retimeToFit objectFit="cover" />
+
+# Narration duration=2beats
+
+<Audio src="/tts-line.mp3" retimeToFit />
+```
+
+At 120 bpm / 30 fps, each beat is 15 frames (0.5s). A 3s video clip in a
+1-beat section gets `playbackRate = 6` (6x speed). A 0.8s TTS clip in a
+2-beat section gets `playbackRate ≈ 0.8` (slowed to fill 1s).
+
+**Reporting behavior:**
+- `retimeToFit={true}` skips duration reporting (the media conforms to the
+  section; reporting would create a circular dependency).
+- `retimeToFit={90}` (numeric) reports the target as effective duration, so
+  auto-duration sections can resolve from it.
+
+**Tweakpane interaction:** Video trim sliders still work with `retimeToFit`.
+Changing trim bounds recalculates the rate live, so the trimmed portion
+always fills the target duration.
+
+Implementation: `computeRetimeRate()` in `media-duration-store.ts`, wired
+into `Audio`, `VideoExportDuration`, `VideoWithTweakpane`, and
+`VideoTrimControls` in `media-components.tsx`.

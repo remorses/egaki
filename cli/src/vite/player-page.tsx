@@ -48,7 +48,7 @@ import type { VideoFrontmatter } from './mdx-parse.ts'
 // The vite plugin sends egaki:scene-changed with { sectionIndex } when
 // the user edits a specific section of the entry MDX.
 // ---------------------------------------------------------------------------
-let pendingSceneSeek: number | null = null
+let pendingSceneSeek: { sectionIndex: number; file: string } | null = null
 /** Cancels the auto-pause listener from a previous scene-seek, so a new
  *  HMR during playback doesn't leave stale listeners that pause the wrong scene. */
 let cancelPreviousAutoPlay: (() => void) | null = null
@@ -131,8 +131,8 @@ function connectToProgress() {
 if (typeof window !== 'undefined') connectToProgress()
 
 if (import.meta.hot) {
-  import.meta.hot.on('egaki:scene-changed', (data: { sectionIndex: number }) => {
-    pendingSceneSeek = data.sectionIndex
+  import.meta.hot.on('egaki:scene-changed', (data: { sectionIndex: number; file: string }) => {
+    pendingSceneSeek = data
   })
   // Reconnect on rsc:update — new generations may have started from
   // MDX edits that trigger server-side rendering of <Server> blocks.
@@ -302,6 +302,11 @@ const SECTION_CONTENT_STYLE: React.CSSProperties = {
 // mount decision happens before that.
 const GHOST_WINDOW_SECONDS = 5
 
+// How many seconds before a section cut to premount the next section.
+// Remotion's premountFor renders the next sequence early (hidden) so
+// <Video> elements start loading before the cut, preventing stutter.
+const PREMOUNT_SECONDS = 3
+
 /**
  * Section content wrapper enabling <LayoutTransition> FLIP animations
  * across section boundaries.
@@ -378,6 +383,9 @@ function VideoComposition({
   totalDuration: number
   preamble?: ReactNode
 }) {
+  const { fps } = useVideoConfig()
+  const premountFrames = Math.round(fps * PREMOUNT_SECONDS)
+
   return (
     <AbsoluteFill style={{ background: '#050505', fontSize: 60 }}>
       {/* Preamble: MDX content before the first heading. Rendered at
@@ -392,6 +400,11 @@ function VideoComposition({
             durationInFrames={section.durationInFrames}
             // @ts-ignore — name prop exists on Series.Sequence
             name={section.heading || `Section ${i}`}
+            // Premount the next section N seconds early so <Video> elements
+            // start loading before the cut, preventing playback stutter.
+            // Remotion renders the premounted section hidden; it receives
+            // its own correct frame context (starting at frame 0).
+            premountFor={premountFrames}
           >
             <SectionIndexContext.Provider value={i}>
               <Suspense fallback={<SuspenseFallback />}>
@@ -418,6 +431,8 @@ export function PlayerPage({
   entryPath,
   hasUnresolvedDurations = false,
   frontmatter,
+  availableEntries = [],
+  currentRoute = '',
 }: {
   sections: SectionProps[]
   totalDuration: number
@@ -428,6 +443,10 @@ export function PlayerPage({
    *  durations still unknown). Gates the export button. */
   hasUnresolvedDurations?: boolean
   frontmatter: VideoFrontmatter
+  /** All available MDX entry route paths for navigation. */
+  availableEntries?: string[]
+  /** Current route path ('' for default entry). */
+  currentRoute?: string
 }) {
   const { fps, width, height, scale } = frontmatter
   const serverSlots = useContext(ServerSlotsContext)
@@ -472,7 +491,12 @@ export function PlayerPage({
   // the section's end so the user sees exactly the content they edited.
   useEffect(() => {
     if (pendingSceneSeek == null) return
-    const idx = pendingSceneSeek
+    // Ignore scene changes from a different entry MDX file.
+    if (pendingSceneSeek.file !== entryPath) {
+      pendingSceneSeek = null
+      return
+    }
+    const idx = pendingSceneSeek.sectionIndex
     pendingSceneSeek = null
 
     // Wait one frame for the Remotion Player to initialize after remount.
@@ -916,6 +940,29 @@ export function PlayerPage({
 
       {/* Floating toolbar — fixed at bottom center */}
       <div className='fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-[#1c1c1c] border border-white/10 px-2 py-1.5 shadow-2xl'>
+        {/* Entry selector — only shown when multiple MDX files exist */}
+        {availableEntries.length > 1 && (
+          <>
+            <select
+              value={currentRoute}
+              onChange={(e) => {
+                const route = e.target.value
+                const base = import.meta.env.BASE_URL ?? '/'
+                window.location.href = `${base}${route}`
+              }}
+              className='appearance-none rounded-full px-3 py-1.5 text-[13px] font-medium text-zinc-300 bg-transparent hover:bg-white/5 transition-colors cursor-pointer outline-none'
+              style={{ maxWidth: 150 }}
+            >
+              {availableEntries.map((route) => (
+                <option key={route} value={route} style={{ background: '#1c1c1c', color: '#d4d4d8' }}>
+                  {route || '(default)'}
+                </option>
+              ))}
+            </select>
+            <ToolbarSeparator />
+          </>
+        )}
+
         {rendering ? (
           <>
             <button

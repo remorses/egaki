@@ -203,6 +203,48 @@ export function resetSectionDurations() {
   egakiStore.setState({ sectionReports: new Map() })
 }
 
+// ---------------------------------------------------------------------------
+// Retime-to-fit: compute playbackRate to fill a target frame count
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the playbackRate needed to make the media (or its trimmed portion)
+ * fill exactly `targetFrames` frames. Returns null when the rate cannot be
+ * determined (missing raw duration or degenerate inputs).
+ *
+ * `targetFrames` is the number of frames the media should occupy. Gaps are
+ * subtracted before computing the rate — the media fills the remaining time.
+ *
+ * trimBefore/trimAfter are in FRAMES (Remotion convention).
+ * gapBefore/gapAfter are in FRAMES.
+ */
+export function computeRetimeRate({
+  rawSeconds,
+  fps,
+  trimBefore,
+  trimAfter,
+  gapBefore,
+  gapAfter,
+  targetFrames,
+}: {
+  rawSeconds?: number
+  fps: number
+  trimBefore?: number
+  trimAfter?: number
+  gapBefore?: number
+  gapAfter?: number
+  targetFrames: number
+}): number | null {
+  const startFrame = trimBefore ?? 0
+  const endFrame = trimAfter ?? (rawSeconds != null ? Math.round(rawSeconds * fps) : null)
+  if (endFrame == null) return null
+  const mediaFrames = endFrame - startFrame
+  if (mediaFrames <= 0) return null
+  const availableFrames = targetFrames - (gapBefore ?? 0) - (gapAfter ?? 0)
+  if (availableFrames <= 0) return null
+  return mediaFrames / availableFrames
+}
+
 /**
  * Returns the count of null-duration sections that have no reports yet.
  * Used by the export button to block export until all media durations

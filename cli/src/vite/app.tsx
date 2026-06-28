@@ -30,7 +30,7 @@ import { Spiceflow } from 'spiceflow'
 import { SafeMdxRenderer } from 'safe-mdx'
 import { mdxParse } from 'safe-mdx/parse'
 import type { EagerModules } from 'safe-mdx/parse'
-import mdxSource, { projectRoot, entryPath, folderName } from 'virtual:egaki-mdx'
+import { entries, entryPaths, defaultRoute, projectRoot, folderName } from 'virtual:egaki-mdx'
 import { Head } from 'spiceflow/react'
 import {
   findServerNodes,
@@ -53,20 +53,8 @@ import {
   type GenerationProgressEvent,
 } from '../cli/cached-generate.js'
 
-/** Dynamically import the modules referenced inside <Server> blocks.
- *  No static module map and no manual file probing: vite's RSC module
- *  runner routes dynamic imports through vite's own resolver, which
- *  handles extensionless relative paths AND bare package specifiers
- *  (e.g. 'egaki/text-to-speech'). The resolved file's 'use client'
- *  directive decides whether exports are client refs or server
- *  components. Map keys are the import sources as written so safe-mdx
- *  resolves them directly. */
+/** Dynamically import the modules referenced inside <Server> blocks. */
 async function importServerModules(ast: any): Promise<EagerModules> {
-  // Bare specifiers must be resolved to absolute file paths BEFORE the
-  // dynamic import: the runner handles runtime-computed file paths, but
-  // bare specifiers fall through to node's native loader, which cannot
-  // load .tsx package sources. createRequire from the project root walks
-  // node_modules + package exports the same way vite's resolver would.
   const requireFromRoot = createRequire(path.join(projectRoot, 'package.json'))
 
   const modules: EagerModules = {}
@@ -80,9 +68,6 @@ async function importServerModules(ast: any): Promise<EagerModules> {
       const id = isPathLike
         ? path.resolve(projectRoot, source)
         : requireFromRoot.resolve(source)
-      // @vite-ignore: runtime-computed path; the RSC module runner
-      // rewrites dynamic imports and resolves file paths through the
-      // vite transform pipeline regardless of static analyzability.
       modules[source] = await import(/* @vite-ignore */ id)
     } catch (e) {
       console.warn(`[egaki] failed to import <Server> module ${source}:`, (e as Error).message)
@@ -91,116 +76,122 @@ async function importServerModules(ast: any): Promise<EagerModules> {
   return modules
 }
 
-const pageTitle = `${folderName} · egaki`
+/** Build the server components map from the mdx-video namespace import.
+ *  mdx-video.tsx has 'use client', so each named export in the namespace
+ *  is an individual client reference. */
+const serverComponents: Record<string, any> = {
+  ...(mdxVideoExports as any),
+  GeneratedImage,
+  GeneratedVideo,
+  GeneratedSpeech,
+}
 
-export const app = new Spiceflow()
-  .get('/api/generation-progress', async function* (): AsyncGenerator<GenerationProgressEvent> {
-    // Subscribe before reading the first snapshot to avoid a race where
-    // a generation finishes between yield and subscribe, leaving the
-    // stream waiting forever for a notification that already fired.
-    let resolve: (() => void) | null = null
-    const unsubscribe = onProgressChange(() => resolve?.())
+/** All route paths available for navigation, sorted. */
+const availableEntries = Object.keys(entries).sort()
 
-    try {
-      while (true) {
-        const progress = getGenerationProgress()
-        yield progress
-        if (progress.summary.total === 0) return
+/** Render a single MDX entry as a page. Shared by all route handlers. */
+async function renderMdxPage(routePath: string) {
+  const mdxSource = (entries as Record<string, string>)[routePath]
+  const currentEntryPath = (entryPaths as Record<string, string>)[routePath]
+  if (mdxSource == null || currentEntryPath == null) return null
 
-        await new Promise<void>((r) => { resolve = r })
-        resolve = null
-      }
-    } finally {
-      unsubscribe()
-    }
-  })
-  .page('/', async () => {
-    let ast: ReturnType<typeof mdxParse>
-    try {
-      ast = mdxParse(mdxSource)
-    } catch (e) {
-      // MDX syntax error — pass the raw source to the client so it can
-      // show the error overlay and recover when the user fixes the syntax.
-      // The client's own try/catch + last-good cache handles the rest.
-      console.error('[egaki] MDX parse error (server):', e)
-      return <>
-        <Head><Head.Title>{pageTitle}</Head.Title></Head>
-        <MdxClientApp mdx={mdxSource} serverSlots={{}} entryPath={entryPath} />
-      </>
-    }
+  const title = routePath
+    ? `${routePath} · ${folderName} · egaki`
+    : `${folderName} · egaki`
 
-    // Auto-wrap <GeneratedImage>, <GeneratedVideo>, <GeneratedSpeech> in
-    // <Server> so they render server-side without manual wrapping in MDX.
-    wrapGenerateNodes(ast)
-    const serverNodes = findServerNodes(ast)
-
-    if (serverNodes.length === 0) {
-      return <>
-        <Head><Head.Title>{pageTitle}</Head.Title></Head>
-        <MdxClientApp mdx={mdxSource} serverSlots={{}} entryPath={entryPath} />
-      </>
-    }
-
-    const eagerModules = await importServerModules(ast)
-
-    // Import nodes (mdxjsEsm) are needed by SafeMdxRenderer to resolve
-    // user components inside each slot. Keep only statements resolvable
-    // in the server modules map — anything else would just produce
-    // missing-module warnings.
-    const importNodes = filterImportNodesToModules(
-      ast.children.filter((node: any) => node.type === 'mdxjsEsm'),
-      Object.keys(eagerModules),
-    )
-
-    // Build the server components map from the mdx-video namespace import.
-    // mdx-video.tsx has 'use client', so each named export in the namespace
-    // is an individual client reference. Spreading the namespace gives
-    // { Fill: clientRef, Video: clientRef, ... } — proper references that
-    // SafeMdxRenderer can render. (Spreading MDX_BUILTIN_COMPONENTS directly
-    // would give {} because it's a single client reference to a const object,
-    // and spreading a function produces an empty object.)
-    const serverComponents: Record<string, any> = {
-      ...(mdxVideoExports as any),
-      // Override client stubs with real server components for generated
-      // media. The stubs return null; the server versions call egaki's
-      // generation APIs and return client wrappers with streaming promises.
-      GeneratedImage,
-      GeneratedVideo,
-      GeneratedSpeech,
-    }
-
-    // Compute FPS and BEAT scope variables so expressions inside <Server>
-    // blocks can reference them, matching the client-side behavior.
-    const { fps, bpm } = parseFrontmatter(ast)
-    const serverScope = buildMdxScope(fps, bpm)
-    const serverEvaluateOptions = { functions: true }
-
-    const serverSlots: Record<string, ReactNode> = {}
-    for (const { key, node } of serverNodes) {
-      if (key in serverSlots) {
-        console.warn(
-          `[egaki] multiple <Server> elements start on line ${key}; ` +
-          `only the first one renders. Put each <Server> on its own line.`,
-        )
-        continue
-      }
-      serverSlots[key] = (
-        <SafeMdxRenderer
-          markdown={mdxSource}
-          mdast={{ type: 'root', children: [...importNodes, ...node.children] } as any}
-          components={serverComponents}
-          modules={eagerModules}
-          baseUrl="./"
-          scope={serverScope}
-          evaluateOptions={serverEvaluateOptions}
-          onError={(e) => console.warn('[egaki] <Server> slot:', e.message)}
-        />
-      )
-    }
-
-    const clientMdx = blankServerContents(mdxSource, serverNodes)
+  let ast: ReturnType<typeof mdxParse>
+  try {
+    ast = mdxParse(mdxSource)
+  } catch (e) {
+    console.error('[egaki] MDX parse error (server):', e)
     return <>
-      <Head><Head.Title>{pageTitle}</Head.Title></Head>
-      <MdxClientApp mdx={clientMdx} serverSlots={serverSlots} entryPath={entryPath} />
+      <Head><Head.Title>{title}</Head.Title></Head>
+      <MdxClientApp mdx={mdxSource} serverSlots={{}} entryPath={currentEntryPath} availableEntries={availableEntries} currentRoute={routePath} />
     </>
-  })
+  }
+
+  wrapGenerateNodes(ast)
+  const serverNodes = findServerNodes(ast)
+
+  if (serverNodes.length === 0) {
+    return <>
+      <Head><Head.Title>{title}</Head.Title></Head>
+      <MdxClientApp mdx={mdxSource} serverSlots={{}} entryPath={currentEntryPath} availableEntries={availableEntries} currentRoute={routePath} />
+    </>
+  }
+
+  const eagerModules = await importServerModules(ast)
+  const importNodes = filterImportNodesToModules(
+    ast.children.filter((node: any) => node.type === 'mdxjsEsm'),
+    Object.keys(eagerModules),
+  )
+
+  const { fps, bpm } = parseFrontmatter(ast)
+  const serverScope = buildMdxScope(fps, bpm)
+  const serverEvaluateOptions = { functions: true }
+
+  const serverSlots: Record<string, ReactNode> = {}
+  for (const { key, node } of serverNodes) {
+    if (key in serverSlots) {
+      console.warn(
+        `[egaki] multiple <Server> elements start on line ${key}; ` +
+        `only the first one renders. Put each <Server> on its own line.`,
+      )
+      continue
+    }
+    serverSlots[key] = (
+      <SafeMdxRenderer
+        markdown={mdxSource}
+        mdast={{ type: 'root', children: [...importNodes, ...node.children] } as any}
+        components={serverComponents}
+        modules={eagerModules}
+        baseUrl="./"
+        scope={serverScope}
+        evaluateOptions={serverEvaluateOptions}
+        onError={(e) => console.warn('[egaki] <Server> slot:', e.message)}
+      />
+    )
+  }
+
+  const clientMdx = blankServerContents(mdxSource, serverNodes)
+  return <>
+    <Head><Head.Title>{title}</Head.Title></Head>
+    <MdxClientApp mdx={clientMdx} serverSlots={serverSlots} entryPath={currentEntryPath} availableEntries={availableEntries} currentRoute={routePath} />
+  </>
+}
+
+// Build the Spiceflow app with explicit routes for each discovered entry.
+// Using explicit routes instead of a wildcard (/*) avoids intercepting
+// the /api/generation-progress GET endpoint. Spiceflow's .page() registers
+// both GET and POST, so a wildcard would shadow the API route.
+function buildApp() {
+  let app = new Spiceflow()
+    .get('/api/generation-progress', async function* (): AsyncGenerator<GenerationProgressEvent> {
+      let resolve: (() => void) | null = null
+      const unsubscribe = onProgressChange(() => resolve?.())
+
+      try {
+        while (true) {
+          const progress = getGenerationProgress()
+          yield progress
+          if (progress.summary.total === 0) return
+
+          await new Promise<void>((r) => { resolve = r })
+          resolve = null
+        }
+      } finally {
+        unsubscribe()
+      }
+    })
+    .page('/', () => renderMdxPage(defaultRoute))
+
+  // Register each entry at its route path. The default also gets its
+  // own /<name> route so the dropdown can navigate to it from other pages.
+  for (const route of availableEntries) {
+    app = app.page(`/${route}`, () => renderMdxPage(route)) as any
+  }
+
+  return app
+}
+
+export const app = buildApp()

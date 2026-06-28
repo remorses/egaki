@@ -8,7 +8,8 @@
  * Changes are tracked per-element using safe-mdx's `data-markdown-line`
  * attribute, then serialized as structured text for an agent to apply.
  *
- * Keyboard: Esc = select parent (deselect at root), Ctrl+Z = undo.
+ * Keyboard: Delete/Backspace = delete selected element, Esc = select parent
+ * (deselect at root), Ctrl+Z = undo.
  *
  * Bug-fix notes (from oracle review, commit 1158b916):
  * - Undo stores a snapshot of the previous ElementChange so restoring
@@ -53,10 +54,12 @@ interface MoveableConstructor {
 // ── Types ──────────────────────────────────────────────────────────────
 
 type ElementKind = 'text' | 'image' | 'video' | 'audio' | 'code' | 'svg' | 'canvas' | 'element'
+type ElementStatus = 'unchanged' | 'deleted'
 
 interface ElementChange {
   mdxLine: number | null
   kind: ElementKind
+  status: ElementStatus
   translateX: number
   translateY: number
   scaleX: number
@@ -65,12 +68,15 @@ interface ElementChange {
   originalTextContent: string | null
   textPreview: string
   tagName: string
+  /** src/href for images and videos, so the prompt identifies which media changed */
+  src: string | null
 }
 
 interface UndoEntry {
   el: HTMLElement
   transform: string
   position: string
+  display: string
   /** Snapshot of the ElementChange before this action, or null if none existed */
   prevChange: ElementChange | null
 }
@@ -115,13 +121,26 @@ function classifyElement(el: HTMLElement): ElementKind {
   return 'element'
 }
 
+/** Extract src for images and videos, checking the element itself and its children */
+function extractMediaSrc(el: HTMLElement): string | null {
+  const tag = el.tagName.toLowerCase()
+  if (tag === 'img') return el.getAttribute('src')
+  if (tag === 'video') return el.getAttribute('src') ?? el.querySelector('source')?.getAttribute('src') ?? null
+  const img = el.querySelector('img')
+  if (img) return img.getAttribute('src')
+  const video = el.querySelector('video')
+  if (video) return video.getAttribute('src') ?? video.querySelector('source')?.getAttribute('src') ?? null
+  return null
+}
+
 function preview(el: HTMLElement): string {
   const t = (el.textContent ?? '').trim()
   return t.length > 60 ? t.slice(0, 60) + '…' : t
 }
 
 function hasChange(c: ElementChange): boolean {
-  return c.translateX !== 0 || c.translateY !== 0
+  return c.status !== 'unchanged'
+    || c.translateX !== 0 || c.translateY !== 0
     || c.scaleX !== 1 || c.scaleY !== 1
     || c.textContent !== null
 }
@@ -173,7 +192,14 @@ function serializeChanges(
   for (const c of entries) {
     const line = c.mdxLine !== null ? ` (line ${c.mdxLine})` : ''
     const text = c.kind === 'text' && c.textPreview ? `: "${c.textPreview}"` : ''
-    parts.push(`**${c.kind}**${line}${text}`)
+    const src = c.src && (c.kind === 'image' || c.kind === 'video') ? ` (src: ${c.src})` : ''
+    parts.push(`**${c.kind}**${line}${text}${src}`)
+
+    if (c.status === 'deleted') {
+      parts.push(`- Deleted`)
+      parts.push('')
+      continue
+    }
 
     if (c.translateX !== 0 || c.translateY !== 0) {
       const x = `${c.translateX > 0 ? '+' : ''}${Math.round(c.translateX)}px`
@@ -320,11 +346,13 @@ export function LayoutEditor({ playerContainerRef, playerRef, editing, onEditing
       changesRef.current.set(target, {
         mdxLine: findMdxLine(target, player ?? document.body),
         kind: classifyElement(target),
+        status: 'unchanged',
         translateX: 0, translateY: 0,
         scaleX: 1, scaleY: 1,
         textContent: null, originalTextContent: null,
         textPreview: preview(target),
         tagName: target.tagName.toLowerCase(),
+        src: extractMediaSrc(target),
       })
     }
 
@@ -335,6 +363,7 @@ export function LayoutEditor({ playerContainerRef, playerRef, editing, onEditing
         el: htmlEl,
         transform: htmlEl.style.transform,
         position: htmlEl.style.position,
+        display: htmlEl.style.display,
         prevChange: existing ? cloneChange(existing) : null,
       })
     })
@@ -357,6 +386,7 @@ export function LayoutEditor({ playerContainerRef, playerRef, editing, onEditing
         el: htmlEl,
         transform: htmlEl.style.transform,
         position: htmlEl.style.position,
+        display: htmlEl.style.display,
         prevChange: existing ? cloneChange(existing) : null,
       })
     })
@@ -482,6 +512,7 @@ export function LayoutEditor({ playerContainerRef, playerRef, editing, onEditing
         if (entry) {
           entry.el.style.transform = entry.transform
           entry.el.style.position = entry.position
+          entry.el.style.display = entry.display
           // Restore previous change snapshot instead of deleting entirely
           if (entry.prevChange) {
             changesRef.current.set(entry.el, entry.prevChange)
@@ -491,6 +522,42 @@ export function LayoutEditor({ playerContainerRef, playerRef, editing, onEditing
           setChangesCount(countChanges())
           if (selectedEl === entry.el) void attachMoveable(entry.el)
         }
+        return
+      }
+
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEl) {
+        e.preventDefault()
+        // Invalidate any in-flight attachMoveable async imports
+        moveableGenRef.current++
+        const player = getPlayer()
+        // Ensure a change entry exists for this element
+        if (!changesRef.current.has(selectedEl)) {
+          changesRef.current.set(selectedEl, {
+            mdxLine: findMdxLine(selectedEl, player ?? document.body),
+            kind: classifyElement(selectedEl),
+            status: 'unchanged',
+            translateX: 0, translateY: 0,
+            scaleX: 1, scaleY: 1,
+            textContent: null, originalTextContent: null,
+            textPreview: preview(selectedEl),
+            tagName: selectedEl.tagName.toLowerCase(),
+            src: extractMediaSrc(selectedEl),
+          })
+        }
+        const existing = changesRef.current.get(selectedEl)!
+        undoStack.current.push({
+          el: selectedEl,
+          transform: selectedEl.style.transform,
+          position: selectedEl.style.position,
+          display: selectedEl.style.display,
+          prevChange: cloneChange(existing),
+        })
+        existing.status = 'deleted'
+        selectedEl.style.display = 'none'
+        moveableRef.current?.destroy()
+        moveableRef.current = null
+        setSelectedEl(null)
+        setChangesCount(countChanges())
         return
       }
 

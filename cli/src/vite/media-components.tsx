@@ -5,7 +5,7 @@
  *
  * Wraps Remotion's Img and @remotion/media's Audio/Video with:
  * - LayoutTransition ghost neutralization (Audio renders nothing in ghost,
- *   Video renders muted for FLIP measurement)
+ *   Video renders a lightweight div placeholder for FLIP measurement)
  * - Promise<string> src support via Suspense + React 19 use()
  * - Auto duration reporting to the per-section duration store
  * - Tweakpane trim controls for interactive Video editing
@@ -40,6 +40,7 @@ import {
   getCachedRawDuration,
   cacheRawDuration,
   computeEffectiveDuration,
+  computeRetimeRate,
   reportSectionDuration,
   useSectionIndex,
 } from './media-duration-store.ts'
@@ -81,6 +82,13 @@ export function useIsExporting(): boolean {
 // the MDX/modules change (see resetSectionDurations in mdx-client.tsx).
 // ---------------------------------------------------------------------------
 
+/**
+ * @param skip - Skip everything (no fetch, no report). Use for ghost
+ *   containers and unresolved promise src.
+ * @param skipReport - Fetch raw duration but do not report effective
+ *   duration to the section store. Use when the media conforms to the
+ *   section (retimeToFit=true) rather than determining it.
+ */
 function useReportMediaDuration(props: {
   src?: string
   trimBefore?: number
@@ -88,7 +96,7 @@ function useReportMediaDuration(props: {
   playbackRate?: number
   gapBefore?: number
   gapAfter?: number
-}, skip?: boolean): number | null {
+}, skip?: boolean, skipReport?: boolean): number | null {
   const instanceId = useId()
   const sectionIndex = useSectionIndex()
   const { fps } = useVideoConfig()
@@ -105,6 +113,7 @@ function useReportMediaDuration(props: {
     let disposed = false
 
     const reportEffective = (raw: number) => {
+      if (skipReport) return
       const effective = computeEffectiveDuration({
         rawSeconds: raw,
         fps,
@@ -120,6 +129,9 @@ function useReportMediaDuration(props: {
     }
 
     // Fast path: both trim bounds set → effective duration fully determined.
+    // Still compute and report, but don't short-circuit the raw duration
+    // fetch — callers (retimeToFit) may need the raw value even when both
+    // trim bounds are present.
     const effectiveFromProps = computeEffectiveDuration({
       fps,
       trimBefore: props.trimBefore,
@@ -129,8 +141,13 @@ function useReportMediaDuration(props: {
       gapAfter: props.gapAfter,
     })
     if (effectiveFromProps != null) {
-      reportSectionDuration(sectionIndex, instanceId, effectiveFromProps)
-      return
+      if (!skipReport) {
+        reportSectionDuration(sectionIndex, instanceId, effectiveFromProps)
+      }
+      // If we don't need to fetch raw duration for other purposes, return early
+      if (!skipReport) return
+      // When skipReport is true (retimeToFit), still try to populate rawDuration
+      // from cache so retime rate can be computed. Fall through to cache check.
     }
 
     // Check raw src cache
@@ -183,7 +200,7 @@ function useReportMediaDuration(props: {
         delayHandle = null
       }
     }
-  }, [props.src, skip, sectionIndex, instanceId, fps, props.trimBefore, props.trimAfter, props.playbackRate, props.gapBefore, props.gapAfter, isExporting])
+  }, [props.src, skip, skipReport, sectionIndex, instanceId, fps, props.trimBefore, props.trimAfter, props.playbackRate, props.gapBefore, props.gapAfter, isExporting])
 
   return rawDuration
 }
@@ -245,6 +262,21 @@ type GapProps = {
   /** Empty frames after the media finishes. Adds to the section's
    *  auto-duration. In frames. */
   gapAfter?: number
+  /**
+   * Retime (speed up or slow down) the media to fit the available duration.
+   *
+   * - `true`: fit the current section's `durationInFrames`.
+   * - `number`: fit that many frames exactly.
+   *
+   * The computed playbackRate replaces any explicit `playbackRate` prop.
+   * When retiming, the component does NOT report its duration to the
+   * section store (it conforms to the section, not the other way around).
+   *
+   * If the media is trimmed (`trimBefore`/`trimAfter`), only the trimmed
+   * portion is retimed. `gapBefore`/`gapAfter` are subtracted from the
+   * target so the media fills the remaining time.
+   */
+  retimeToFit?: boolean | number
 }
 
 type AudioProps = Omit<ComponentProps<typeof MediaAudio>, 'src'> & GapProps & {
@@ -257,27 +289,67 @@ function ResolvedAudio({ srcPromise, ...rest }: { srcPromise: Promise<string> } 
 }
 
 export function Audio(props: AudioProps) {
-  const { gapBefore, gapAfter, src, ...mediaProps } = props
+  const { gapBefore, gapAfter, retimeToFit, src, ...mediaProps } = props
   const container = useContext(LayoutContainerContext)
-  // Skip duration reporting when src is a promise (not yet resolved)
-  useReportMediaDuration(
+  const { fps, durationInFrames } = useVideoConfig()
+  const instanceId = useId()
+  const sectionIndex = useSectionIndex()
+
+  // Skip duration reporting only for boolean true (circular dependency).
+  // Numeric retimeToFit has an explicit target, so it can safely report.
+  const skipReport = retimeToFit === true
+  const skipFetch = container === 'ghost' || src instanceof Promise
+
+  // Fetch raw duration and report effective duration (unless skipped)
+  const rawDuration = useReportMediaDuration(
     { ...props, src: typeof src === 'string' ? src : undefined },
-    container === 'ghost' || src instanceof Promise,
+    skipFetch,
+    skipReport,
   )
+
+  // Compute retime rate from raw duration + section/explicit target.
+  // Also works when both trimBefore/trimAfter are set (rawDuration not needed).
+  const canComputeRate = rawDuration != null || (mediaProps.trimBefore != null && mediaProps.trimAfter != null)
+  let retimeRate: number | undefined
+  if (retimeToFit && canComputeRate) {
+    const targetFrames = typeof retimeToFit === 'number' ? retimeToFit : durationInFrames
+    const rate = computeRetimeRate({
+      rawSeconds: rawDuration ?? undefined,
+      fps,
+      trimBefore: mediaProps.trimBefore,
+      trimAfter: mediaProps.trimAfter,
+      gapBefore,
+      gapAfter,
+      targetFrames,
+    })
+    if (rate != null) retimeRate = rate
+  }
+
+  // For numeric retimeToFit, report the target as effective duration
+  // so auto-duration sections can resolve from it.
+  if (typeof retimeToFit === 'number' && retimeToFit > 0) {
+    reportSectionDuration(sectionIndex, instanceId, retimeToFit / fps)
+  }
+
   if (container === 'ghost') return null
 
   if (src instanceof Promise) {
     return (
       <Suspense fallback={<ExportDelayFallback />}>
-        <ResolvedAudio srcPromise={src} gapBefore={gapBefore} gapAfter={gapAfter} {...mediaProps} />
+        <ResolvedAudio srcPromise={src} gapBefore={gapBefore} gapAfter={gapAfter} retimeToFit={retimeToFit} {...mediaProps} />
       </Suspense>
     )
   }
 
+  // Apply computed retime rate, overriding any explicit playbackRate
+  const finalProps = retimeRate != null
+    ? { ...mediaProps, playbackRate: retimeRate }
+    : mediaProps
+
   if (gapBefore) {
-    return <Sequence from={gapBefore} layout="none"><MediaAudio src={src} {...mediaProps} /></Sequence>
+    return <Sequence from={gapBefore} layout="none"><MediaAudio src={src} {...finalProps} /></Sequence>
   }
-  return <MediaAudio src={src} {...mediaProps} />
+  return <MediaAudio src={src} {...finalProps} />
 }
 
 type VideoProps = Omit<ComponentProps<typeof MediaVideo>, 'src'> & GapProps & {
@@ -290,7 +362,7 @@ function ResolvedVideo({ srcPromise, ...rest }: { srcPromise: Promise<string> } 
 }
 
 export function Video(props: VideoProps) {
-  const { gapBefore, gapAfter, src, ...mediaProps } = props
+  const { gapBefore, gapAfter, retimeToFit, src, ...mediaProps } = props
   const container = useContext(LayoutContainerContext)
   const isExporting = useIsExporting()
 
@@ -298,7 +370,7 @@ export function Video(props: VideoProps) {
   if (src instanceof Promise) {
     return (
       <Suspense fallback={<ExportDelayFallback />}>
-        <ResolvedVideo srcPromise={src} gapBefore={gapBefore} gapAfter={gapAfter} {...mediaProps} />
+        <ResolvedVideo srcPromise={src} gapBefore={gapBefore} gapAfter={gapAfter} retimeToFit={retimeToFit} {...mediaProps} />
       </Suspense>
     )
   }
@@ -320,23 +392,53 @@ export function Video(props: VideoProps) {
     gapBefore ? <Sequence from={gapBefore} layout="none">{el}</Sequence> : el
 
   if (container === 'ghost') {
-    // Render real video muted so LayoutTransition FLIP gets accurate geometry
-    return wrapWithGap(<MediaVideo {...filledProps} muted volume={0} />)
+    return wrapWithGap(<div style={filledProps.style} />)
   }
 
   // During export, report duration but skip tweakpane UI
   if (isExporting) {
-    return wrapWithGap(<VideoExportDuration {...filledProps} gapBefore={gapBefore} gapAfter={gapAfter} />)
+    return wrapWithGap(
+      <VideoExportDuration {...filledProps} gapBefore={gapBefore} gapAfter={gapAfter} retimeToFit={retimeToFit} />,
+    )
   }
 
-  return wrapWithGap(<VideoWithTweakpane {...filledProps} gapBefore={gapBefore} gapAfter={gapAfter} />)
+  return wrapWithGap(
+    <VideoWithTweakpane {...filledProps} gapBefore={gapBefore} gapAfter={gapAfter} retimeToFit={retimeToFit} />,
+  )
 }
 
 /** Export mode: reports duration to section store, renders plain MediaVideo. */
-function VideoExportDuration(props: ComponentProps<typeof MediaVideo> & GapProps) {
-  const { gapBefore, gapAfter, ...mediaProps } = props
-  useReportMediaDuration(props)
-  return <MediaVideo {...mediaProps} />
+function VideoExportDuration(props: ComponentProps<typeof MediaVideo> & GapProps & {
+  retimeToFit?: boolean | number
+}) {
+  const { gapBefore, gapAfter, retimeToFit, ...mediaProps } = props
+  const { fps, durationInFrames } = useVideoConfig()
+  const instanceId = useId()
+  const sectionIndex = useSectionIndex()
+  const skipReport = retimeToFit === true
+
+  const rawDuration = useReportMediaDuration(props, false, skipReport)
+
+  // Compute retime rate from raw duration or trim bounds
+  const canComputeRate = rawDuration != null || (mediaProps.trimBefore != null && mediaProps.trimAfter != null)
+  let retimeRate: number | undefined
+  if (retimeToFit && canComputeRate) {
+    const targetFrames = typeof retimeToFit === 'number' ? retimeToFit : durationInFrames
+    const rate = computeRetimeRate({
+      rawSeconds: rawDuration ?? undefined, fps,
+      trimBefore: mediaProps.trimBefore, trimAfter: mediaProps.trimAfter,
+      gapBefore, gapAfter, targetFrames,
+    })
+    if (rate != null) retimeRate = rate
+  }
+
+  // For numeric retimeToFit, report the target as effective duration
+  if (typeof retimeToFit === 'number' && retimeToFit > 0) {
+    reportSectionDuration(sectionIndex, instanceId, retimeToFit / fps)
+  }
+
+  const finalProps = retimeRate != null ? { ...mediaProps, playbackRate: retimeRate } : mediaProps
+  return <MediaVideo {...finalProps} />
 }
 
 /**
@@ -344,15 +446,19 @@ function VideoExportDuration(props: ComponentProps<typeof MediaVideo> & GapProps
  * to VideoTrimControls for tweakpane trim sliders. Until duration is known,
  * renders the video without trim controls.
  */
-function VideoWithTweakpane(props: ComponentProps<typeof MediaVideo> & GapProps) {
-  const rawDuration = useReportMediaDuration(props)
-  const { gapBefore, gapAfter, ...mediaProps } = props
+function VideoWithTweakpane(props: ComponentProps<typeof MediaVideo> & GapProps & {
+  retimeToFit?: boolean | number
+}) {
+  const { retimeToFit } = props
+  const skipReport = retimeToFit === true
+  const rawDuration = useReportMediaDuration(props, false, skipReport)
+  const { gapBefore, gapAfter, retimeToFit: _, ...mediaProps } = props
 
   if (rawDuration === null) {
     return <MediaVideo {...mediaProps} />
   }
 
-  return <VideoTrimControls {...mediaProps} mediaDuration={rawDuration} />
+  return <VideoTrimControls {...mediaProps} mediaDuration={rawDuration} retimeToFit={retimeToFit} gapBefore={gapBefore} gapAfter={gapAfter} />
 }
 
 /**
@@ -372,11 +478,18 @@ function VideoWithTweakpane(props: ComponentProps<typeof MediaVideo> & GapProps)
  * section's start frame in the composition, cached on first render.
  */
 function VideoTrimControls(
-  props: ComponentProps<typeof MediaVideo> & { mediaDuration: number },
+  props: ComponentProps<typeof MediaVideo> & {
+    mediaDuration: number
+    retimeToFit?: boolean | number
+    gapBefore?: number
+    gapAfter?: number
+  },
 ) {
-  const { mediaDuration, ...videoProps } = props
+  const { mediaDuration, retimeToFit, gapBefore, gapAfter, ...videoProps } = props
   const { fps, durationInFrames: sectionDuration } = useVideoConfig()
   const relativeFrame = useCurrentFrame()
+  const instanceId = useId()
+  const sectionIndex = useSectionIndex()
 
   // Compute the absolute frame offset of this section once on first render.
   // useCurrentFrame() = relative, egakiSDK.getCurrentFrame() = absolute.
@@ -453,5 +566,27 @@ function VideoTrimControls(
   const trimBefore = tp.start > 0 ? Math.round(tp.start * fps) : undefined
   const trimAfter = tp.end < mediaDuration ? Math.round(tp.end * fps) : undefined
 
-  return <MediaVideo {...videoProps} trimBefore={trimBefore} trimAfter={trimAfter} />
+  // Compute retime rate from the FINAL tweakpane-resolved trim values.
+  // This ensures dragging trim sliders recalculates the playback rate.
+  let retimeRate: number | undefined
+  if (retimeToFit) {
+    const targetFrames = typeof retimeToFit === 'number' ? retimeToFit : sectionDuration
+    const rate = computeRetimeRate({
+      rawSeconds: mediaDuration, fps,
+      trimBefore, trimAfter,
+      gapBefore, gapAfter, targetFrames,
+    })
+    if (rate != null) retimeRate = rate
+  }
+
+  // For numeric retimeToFit, report the target as effective duration
+  if (typeof retimeToFit === 'number' && retimeToFit > 0) {
+    reportSectionDuration(sectionIndex, instanceId, retimeToFit / fps)
+  }
+
+  const finalProps = retimeRate != null
+    ? { ...videoProps, playbackRate: retimeRate }
+    : videoProps
+
+  return <MediaVideo {...finalProps} trimBefore={trimBefore} trimAfter={trimAfter} />
 }
