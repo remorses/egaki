@@ -445,14 +445,33 @@ export function video(options?: VideoPluginOptions): PluginOption[] {
       }
 
       if (isEntryMdx) {
-        invalidateVirtual([RESOLVED_APP, RESOLVED_MDX])
+        // Every root .mdx is both a route entry (virtual:egaki-mdx / RSC
+        // flight) and a ?raw partial in virtual:egaki-modules (importable
+        // via `import X from './foo.mdx'`). Must refresh both paths:
+        // rsc:update for the entry source, and modules dep-accept for
+        // partials. Invalidating only RESOLVED_MODULES is not enough —
+        // Vite keeps the cached ?raw binding, so also invalidate every
+        // module graph node for this file (including `?raw`).
+        invalidateVirtual([RESOLVED_APP, RESOLVED_MDX, RESOLVED_MODULES])
 
         if (this.environment.name === 'client') {
+          const fileMods = this.environment.moduleGraph.getModulesByFile(ctx.file)
+          if (fileMods) {
+            for (const mod of fileMods) {
+              this.environment.moduleGraph.invalidateModule(mod)
+            }
+          }
           ctx.server.environments.client?.hot.send({
             type: 'custom',
             event: 'rsc:update',
             data: { file: ctx.file },
           })
+          const modulesMod = this.environment.moduleGraph.getModuleById(RESOLVED_MODULES)
+          const updates = [
+            ...(fileMods ? [...fileMods] : []),
+            ...(modulesMod ? [modulesMod] : []),
+          ]
+          return updates
         }
         return []
       }
