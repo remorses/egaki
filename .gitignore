@@ -2,6 +2,7 @@ node_modules
 dist
 tmp
 .env
+.dev.vars
 *.tgz
 *.tsbuildinfo
 bun.lock

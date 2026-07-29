@@ -2,9 +2,37 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "egaki-gateway",
   "main": "src/worker.ts",
-  "compatibility_date": "2025-05-26",
+  "compatibility_date": "2026-06-29",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+
+  // Cloudflare runtime tracing (KV, R2, fetch, handler spans). Works alongside
+  // the Strada SDK: built-in tracing gives automatic spans, the SDK gives
+  // error capture and structured logs.
+  "observability": {
+    "traces": { "enabled": true }
+  },
+
+  // Strada project ID is public — it only identifies which project telemetry
+  // belongs to. The ingest token is a secret (see "secrets" below).
+  "vars": {
+    "STRADA_PROJECT_ID": "01KYP8AMJF2MX4VYRK2RTRACJH",
+    "ENVIRONMENT": "production"
+  },
+
+  // Declared secrets are typed as `string` on the global Env by `wrangler
+  // types`, and `wrangler deploy` refuses to deploy when one is unset.
+  // Values are managed in Doppler and uploaded with `pnpm secrets`.
+  "secrets": {
+    "required": [
+      "AI_GATEWAY_API_KEY",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "RESEND_API_KEY",
+      "RESEND_FROM",
+      "STRADA_TOKEN"
+    ]
+  },
 
   // KV Namespace for API keys, usage, subscriptions
   "kv_namespaces": [

@@ -22,6 +22,14 @@ cd website && pnpm deploy
 
 This runs `pnpm build && wrangler deploy`. Never use `holocron deploy` for this project.
 
+## Strada observability
+
+The gateway and website Workers initialize `@strada.sh/sdk` at module scope.
+Any error caught and handled inline must call `captureException` with a
+`route` or `handler` tag because top-level error handlers cannot see it.
+Use `getLogger()` for structured logs instead of `console.error` or
+`console.warn`, which only reach Cloudflare's platform logs.
+
 ## Code style
 
 **Never use `textShadow`.** It looks bad in video. This applies to all components,

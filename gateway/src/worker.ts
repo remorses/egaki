@@ -14,22 +14,43 @@
 //   GET /api/status    — Subscription status for an API key
 //   POST /api/cancel   — Cancel subscription
 //   GET /api/plans     — Available plans and pricing
+//
+// Strada initializes at module scope so OpenTelemetry providers exist before
+// the first request. Inline-handled errors call captureException directly.
 
+import { env } from 'cloudflare:workers'
 import { Hono, type Context } from 'hono'
 import { cors } from 'hono/cors'
 import Stripe from 'stripe'
 import { Resend } from 'resend'
+import { captureException, getLogger, initStrada } from '@strada.sh/sdk'
 import type { Experimental_VideoModelV3CallOptions } from '@ai-sdk/provider'
-import type { Env } from './env.js'
-import { requireEnv, getPublicUrl } from './env.js'
 import { EgakiKv, type ApiKeyRecord } from './kv.js'
 import { PLANS, PLAN_IDS, DEFAULT_PLAN, MARKUP_MULTIPLIER, getModelUserCost, getVideoUserCost, getStripePriceId, getPlanByPriceId, type PlanId, type Currency, type Plan } from './plans.js'
 
+initStrada({
+  projectId: env.STRADA_PROJECT_ID,
+  token: env.STRADA_TOKEN,
+  service: 'egaki-gateway',
+  environment: env.ENVIRONMENT,
+})
+
+const logger = getLogger('gateway')
+
 const app = new Hono<{ Bindings: Env }>()
+
+app.onError((error, c) => {
+  captureException(error, { tags: { route: new URL(c.req.url).pathname } })
+  return c.json({ error: 'Internal error' }, 500)
+})
 
 const UPSTREAM_BASE = 'https://ai-gateway.vercel.sh'
 
 // ── Helpers ───────────────────────────────────────────────────────────────
+
+function getPublicUrl(c: { req: { url: string } }): string {
+  return new URL(c.req.url).origin
+}
 
 function generateApiKey(): string {
   const raw = crypto.randomUUID().replace(/-/g, '')
@@ -352,6 +373,15 @@ const handleAiProxy = async (c: Context<{ Bindings: Env }>) => {
         })
       : getModelUserCost(modelId) * imageCount
     await kv.incrementUsage(apiKey, userCost)
+  } else {
+    logger.error({
+      message: 'upstream ai gateway request failed',
+      status: upstreamResponse.status,
+      modelId,
+      requestKind,
+      path: reqUrl.pathname,
+      plan: record.plan,
+    })
   }
 
   // 6. Return upstream response
@@ -446,7 +476,7 @@ app.get('/uploads/:id', async (c) => {
 
 app.get('/buy', async (c) => {
   try {
-    const stripeSecret = requireEnv(c.env.STRIPE_SECRET_KEY, 'STRIPE_SECRET_KEY')
+    const stripeSecret = c.env.STRIPE_SECRET_KEY
     const publicUrl = getPublicUrl(c)
 
     const email = c.req.query('email')
@@ -475,6 +505,10 @@ app.get('/buy', async (c) => {
 
     return c.redirect(session.url, 303)
   } catch (error) {
+    // Top of the funnel: a user clicked buy and got a dead end.
+    captureException(error, {
+      tags: { route: 'buy', plan: c.req.query('plan') || DEFAULT_PLAN },
+    })
     if (error instanceof Stripe.errors.StripeError) {
       return c.text(`Checkout failed: ${error.message}`, 500)
     }
@@ -624,9 +658,14 @@ app.post('/stripe/webhook', async (c) => {
   if (!sig) return c.text('Missing Stripe signature', 400)
 
   const body = await c.req.text()
-  const secret = requireEnv(c.env.STRIPE_WEBHOOK_SECRET, 'STRIPE_WEBHOOK_SECRET')
+  const secret = c.env.STRIPE_WEBHOOK_SECRET
   const valid = await verifyStripeSignature(body, sig, secret)
-  if (!valid) return c.text('Invalid Stripe signature', 400)
+  if (!valid) {
+    captureException(new Error('Invalid Stripe webhook signature'), {
+      tags: { route: 'stripe-webhook', reason: 'invalid-signature' },
+    })
+    return c.text('Invalid Stripe signature', 400)
+  }
 
   const event = JSON.parse(body) as { type: string; account?: string; data: { object: any } }
   const kv = new EgakiKv(c.env.EGAKI_KV)
@@ -686,7 +725,14 @@ app.post('/stripe/webhook', async (c) => {
         try {
           await sendApiKeyEmail(c.env, email, apiKey, plan)
         } catch (err) {
-          console.error('Failed to send API key email', err)
+          captureException(err, {
+            tags: {
+              route: 'stripe-webhook',
+              step: 'send-api-key-email',
+              plan: plan.id,
+              checkoutSessionId: session.id,
+            },
+          })
         }
       }
     }
@@ -786,7 +832,7 @@ app.post('/api/cancel', async (c) => {
   if (!record.subscriptionId) return c.json({ error: 'No subscription to cancel' }, 400)
 
   try {
-    const stripeSecret = requireEnv(c.env.STRIPE_SECRET_KEY, 'STRIPE_SECRET_KEY')
+    const stripeSecret = c.env.STRIPE_SECRET_KEY
     const stripe = new Stripe(stripeSecret)
     await stripe.subscriptions.cancel(record.subscriptionId)
 
@@ -796,6 +842,9 @@ app.post('/api/cancel', async (c) => {
 
     return c.json({ success: true, message: 'Subscription canceled. You can resubscribe anytime.' })
   } catch (error) {
+    captureException(error, {
+      tags: { route: 'api-cancel', plan: record.plan, subscriptionId: record.subscriptionId },
+    })
     if (error instanceof Stripe.errors.StripeError) {
       return c.json({ error: `Failed to cancel: ${error.message}` }, 500)
     }

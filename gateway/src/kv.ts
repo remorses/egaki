@@ -7,7 +7,6 @@
 //   checkout:{sessionId}  → CheckoutRecord  (Stripe checkout → API key mapping)
 //   subscription:{subId}  → SubRecord       (Stripe subscription → API key mapping)
 
-import type { KVNamespace } from '@cloudflare/workers-types'
 import type { PlanId } from './plans.js'
 
 // ── KV value types ────────────────────────────────────────────────────────

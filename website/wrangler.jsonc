@@ -1,8 +1,25 @@
 {
   "name": "egaki-docs",
   "main": "spiceflow/cloudflare-entrypoint",
-  "compatibility_date": "2026-06-01",
+  "compatibility_date": "2026-06-29",
   "compatibility_flags": ["nodejs_compat"],
+
+  // Cloudflare runtime tracing, alongside the Strada SDK spans from Spiceflow.
+  "observability": {
+    "traces": { "enabled": true }
+  },
+
+  // The project ID only names the telemetry destination and is safe to expose.
+  // The ingest token remains server-only.
+  "vars": {
+    "STRADA_PROJECT_ID": "01KYP8AMJF2MX4VYRK2RTRACJH",
+    "ENVIRONMENT": "production"
+  },
+
+  "secrets": {
+    "required": ["STRADA_TOKEN"]
+  },
+
   // egaki.org root serves the docs site. The gateway worker (gateway/) keeps
   // serving its API paths (/v3/*, /api/*, /buy, /success, /stripe/*, /upload*)
   // via zone path routes, which take precedence over this custom domain.
