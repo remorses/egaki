@@ -1,9 +1,10 @@
 /**
- * Custom components for the video-example showcase.
- * Dot and ListItem are used for the intra-scene LayoutTransition demo.
+ * Custom components for the video-example showcase and e2e HMR tests.
+ * Only exports components (no data) so React Fast Refresh works.
+ * Data constants live in data.ts.
  */
 
-import { useCurrentFrame, useVideoConfig } from 'remotion'
+import type { FEATURES } from './data'
 
 export function Dot() {
   return (
@@ -29,9 +30,6 @@ export function ListItem({
   description: string
   children?: React.ReactNode
 }) {
-  const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
-
   return (
     <div
       style={{
@@ -69,5 +67,58 @@ export function ListItem({
         </span>
       </div>
     </div>
+  )
+}
+
+export function FeatureGrid({ features }: { features: typeof FEATURES }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, auto)',
+        gap: 16,
+        padding: '24px 80px 0',
+      }}
+    >
+      {features.map((f) => (
+        <div
+          key={f.label}
+          style={{
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            padding: '16px 28px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+          }}
+        >
+          <span style={{ fontSize: 24 }}>{f.icon}</span>
+          <span
+            style={{
+              fontSize: 20,
+              fontWeight: 500,
+              color: '#e4e4e7',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {f.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Demo: MDX expression props can be functions because rendering happens
+ * on the client (no RSC serialization boundary). Used by the e2e tests.
+ */
+export function FnPropDemo({ format }: { format?: (s: string) => string }) {
+  return (
+    <span style={{ color: '#fafafa', fontSize: 40 }}>
+      {format ? format('fn-props-work') : 'no-fn-prop'}
+    </span>
   )
 }

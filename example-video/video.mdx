@@ -3,9 +3,15 @@ fps: 30
 bpm: 120
 ---
 
-import { Dot, ListItem } from './components'
+import { Dot, ListItem, FeatureGrid } from './components'
+import { FEATURES } from './data'
+import { AsyncStats } from './async-stats'
+import { TextToSpeech } from 'egaki/text-to-speech'
+import Tagline from './tagline.mdx'
 
-# Title A duration=0.7s
+<Audio src="/minecraft-soundtrack.mp3" />
+
+# Layout A duration=0.7s
 
 <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 30 }}>
   <LayoutTransition id="hero">
@@ -13,7 +19,7 @@ import { Dot, ListItem } from './components'
   </LayoutTransition>
 </div>
 
-# Title B duration=2.5s
+# Layout B duration=2s
 
 <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 30 }}>
   <LayoutTransition id="hero" duration={20}>
@@ -24,91 +30,69 @@ import { Dot, ListItem } from './components'
   </TranslateX>
 </div>
 
-# Blur Reveal duration=3s
+# Opening duration=3.3s
 
-<Blur from={24} to={0} duration={30} label="blur-reveal">
-  <Opacity from={0} to={1} duration={30} label="blur-fade">
-    <BlurReveal text="Create videos from code" fontSize={72} />
-  </Opacity>
-</Blur>
-
-# Shimmer duration=3s
-
-<Opacity from={0} to={1} duration={15} label="shimmer-fade">
-  <ShimmerSweep text="egaki" fontSize={120} fontWeight={700} baseColor="#3f3f46" shineColor="#fafafa" />
+<Opacity from={0} to={1} duration={30} label="opening-fade">
+  <BlurReveal text="Create videos from code" fontSize={72} />
 </Opacity>
 
-# Masked Reveal duration=3s
+# Arrakis duration=6s
 
-<Opacity from={0} to={1} duration={12} label="masked-enter">
-  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="masked-exit">
-    <MaskedSlideReveal text="MDX powered video framework" fontSize={64} />
-  </Opacity>
-</Opacity>
+<Video src="/arrakis.mp4" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
 
-# Staggered duration=3s
+# Tagline duration=2.8s
 
-<Opacity from={0} to={1} duration={12} label="stagger-enter">
-  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="stagger-exit">
-    <StaggeredFadeUp text="Write components. Render frames. Export video." fontSize={44} color="#a1a1aa" />
-  </Opacity>
-</Opacity>
+some text
 
-# Code Block duration=5s
+## another duration=2s
 
-<Opacity from={0} to={1} duration={12} label="code-enter">
-  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="code-exit">
-    <CodeBlock title="video.mdx" language="mdx" theme="vercel" width={800} staggerFrames={2}>
-{`---
-fps: 30
-bpm: 120
----
+<Tagline />
 
-# Intro duration=3s
+# Create duration=9.5s
 
-<BlurReveal text="Hello" />
-
-# Scene duration=5s
-
-<TranslateX from={-140} to={0} duration={20} label="demo-slide">
-  <CodeBlock title="app.tsx">
-    {'export default () => <h1>egaki</h1>'}
-  </CodeBlock>
-</TranslateX>`}
+<Opacity from={0} to={1} duration={15} label="create-in">
+  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="create-out">
+    <CodeBlock title="create.sh" language="bash" theme="vercel" width={780}>
+{`npx -y egaki create my-video
+cd my-video && pnpm dev`}
     </CodeBlock>
   </Opacity>
 </Opacity>
 
-# Bands duration=4s
+# Configure duration=6.7s
 
-<Background>
-  <BandsShader colors={['#6366f1', '#8b5cf6', '#06b6d4', '#3b82f6']} speed={0.2} />
-</Background>
+<Opacity from={0} to={1} duration={12} label="config-in">
+  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="config-out">
+    <CodeBlock title="video.mdx" language="mdx" theme="vercel" width={780}>
+{`---
+fps: 30
+---
 
-<Opacity from={0} to={1} duration={20} label="bands-fade">
-  <BlurReveal text="Shader backgrounds" fontSize={64} color="#ffffff" />
+# Intro duration=3s
+
+<BlurReveal text="Hello" />`}
+    </CodeBlock>
+  </Opacity>
 </Opacity>
 
-# Slide Animations duration=4s
+# Features duration=5.3s
 
-<TranslateX from={-200} to={0} duration={20} label="slide-title">
-  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="slide-exit">
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}>
-      <span style={{ fontSize: 56, fontWeight: 700, color: '#fafafa', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>Slide from any direction</span>
-      <TranslateY from={-80} to={0} duration={25} startInFrames={10} inline label="subtitle-slide">
-        <span style={{ fontSize: 32, color: '#a1a1aa', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>up, down, left, right</span>
-      </TranslateY>
-    </div>
+<Opacity from={0} to={1} duration={12} label="features-in">
+  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="features-out">
+    <FeatureGrid features={FEATURES} />
   </Opacity>
-</TranslateX>
+</Opacity>
 
-# Zoom duration=3s
+# Analytics duration=6s
 
-<Scale from={1} to={1.8} duration={25} label="zoom-in">
-  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="zoom-exit">
-    <span style={{ fontSize: 72, fontWeight: 700, color: '#fafafa', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>Zoom In</span>
+<Opacity from={0} to={1} duration={15} label="analytics-in">
+  <Opacity from={1} to={0} duration={15} startInFrames={-15} label="analytics-out">
+    <Server>
+      <AsyncStats />
+      <TextToSpeech text="Analyticsz that build themselves." />
+    </Server>
   </Opacity>
-</Scale>
+</Opacity>
 
 # Active List duration=6s
 
@@ -132,11 +116,8 @@ bpm: 120
   </div>
 </Fill>
 
-# Closing duration=3s
+# Closing duration=3.3s
 
-<Opacity from={0} to={1} duration={20} label="closing-fade">
-  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-    <span style={{ fontSize: 120, fontWeight: 700, color: '#fafafa', letterSpacing: '-0.04em', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif' }}>egaki</span>
-    <StaggeredFadeUp text="MDX to video, in the browser" fontSize={32} color="#71717a" staggerDelay={3} />
-  </div>
+<Opacity from={0} to={1} duration={15} label="closing-fade">
+  <ShimmerSweep text="egaki" fontSize={88} fontWeight={700} baseColor="#3f3f46" shineColor="#fafafa" />
 </Opacity>
