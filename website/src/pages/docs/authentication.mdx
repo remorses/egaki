@@ -80,17 +80,27 @@ your Google Cloud project. AI Studio has free tier quotas for many models.
 
 ## Egaki subscription
 
-One API key for all supported models. Three plans:
+One API key for all supported models. Two plans:
 
-| Plan | Price | Credits | Approx. images |
-|------|-------|---------|-----------------|
-| Starter | $9/mo | 100 | ~100 standard images |
-| Pro | $29/mo | 500 | ~500 standard images |
-| Unlimited | $99/mo | 2000 | ~2000 standard images |
+| Plan | Price | Monthly usage budget |
+|------|-------|----------------------|
+| Plus | $29/mo | $29 of generation usage |
+| Pro | $99/mo | $99 of generation usage |
+
+Usage is tracked in dollars, not credits: each generation counts its
+provider cost (with a markup) against your monthly budget. The budget
+resets every 30 days. As a reference, $29 covers roughly 500 standard
+Imagen images.
+
+Buy directly with these links (opening `/buy` without a plan defaults
+to Plus):
+
+- Plus: [egaki.org/buy?plan=plus](https://egaki.org/buy?plan=plus)
+- Pro: [egaki.org/buy?plan=pro](https://egaki.org/buy?plan=pro)
 
 ```bash
-# Subscribe (opens checkout URL)
-egaki subscribe --plan pro --email user@example.com
+# Subscribe (opens checkout URL); plan is plus or pro
+egaki subscribe --plan plus --email user@example.com
 
 # Save the key after checkout
 egaki login --provider egaki --key egaki_...

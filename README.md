@@ -337,8 +337,8 @@ egaki supports **both** authentication modes:
 - **Google vs Vertex:** bare model IDs (e.g. `imagen-4.0-generate-001`) use Google AI Studio. Prefix with `vertex/` (e.g. `vertex/imagen-4.0-generate-001`) to route through Vertex AI / Google Cloud billing.
 
 ```bash
-# Subscribe and get a checkout URL
-egaki subscribe --email user@example.com --plan pro
+# Subscribe and get a checkout URL (plans: plus $29/mo, pro $99/mo)
+egaki subscribe --email user@example.com --plan plus
 
 # Subscribe without email prefill
 egaki subscribe --plan pro

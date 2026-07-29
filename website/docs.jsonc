@@ -77,6 +77,7 @@
             "icon": "lucide:chevrons-right",
             "pages": [
               "docs/cli/index",
+              "docs/cli/dev",
               "docs/cli/image",
               "docs/cli/video",
               "docs/cli/speech",
