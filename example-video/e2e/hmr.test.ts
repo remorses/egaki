@@ -60,7 +60,10 @@ test.describe.serial('video HMR @dev', () => {
       fs.writeFileSync(mdxPath, updatedMdx + `\n{/* hmr ${Date.now()} */}`)
       const markerAlive = await page.evaluate(() => (window as any).__hmr_marker === true)
       if (!markerAlive) return 'full-reload'
-      const visible = await playerContainer.locator('text=HMRTITLE').isVisible().catch(() => false)
+      // .first(): LayoutTransition keeps a ghost copy of the previous section,
+      // so the same text can match two nodes (one visible, one visibility:hidden).
+      // isVisible() without .first() throws strict-mode and the catch returns false.
+      const visible = await playerContainer.locator('text=HMRTITLE').first().isVisible().catch(() => false)
       return visible ? 'updated' : 'waiting'
     }, { timeout: 15_000, message: 'MDX HMR: new text did not appear in Player' }).toBe('updated')
   })
@@ -99,8 +102,8 @@ test.describe.serial('video HMR @dev', () => {
     // functions cannot cross an RSC flight boundary.
     const updatedMdx = originalMdx
       .replace(
-        "import { FeatureGrid } from './components'",
-        "import { FeatureGrid, FnPropDemo } from './components'",
+        "import { Dot, ListItem, FeatureGrid } from './components'",
+        "import { Dot, ListItem, FeatureGrid, FnPropDemo } from './components'",
       )
       .replace(
         '# Layout A duration=0.7s',
@@ -111,7 +114,7 @@ test.describe.serial('video HMR @dev', () => {
       fs.writeFileSync(mdxPath, updatedMdx + `\n{/* hmr ${Date.now()} */}`)
       const markerAlive = await page.evaluate(() => (window as any).__hmr_marker === true)
       if (!markerAlive) return 'full-reload'
-      const visible = await playerContainer.locator('text=FN-PROPS-WORK').isVisible().catch(() => false)
+      const visible = await playerContainer.locator('text=FN-PROPS-WORK').first().isVisible().catch(() => false)
       return visible ? 'updated' : 'waiting'
     }, { timeout: 15_000, message: 'function prop did not render' }).toBe('updated')
   })
@@ -127,7 +130,7 @@ test.describe.serial('video HMR @dev', () => {
     await expect(playerContainer).toBeVisible()
     await page.waitForFunction(() => window.egakiSDK?.seekTo)
     await page.evaluate(() => window.egakiSDK.seekTo(1050))
-    await expect(playerContainer.locator('text=MDX Components')).toBeVisible({ timeout: 5000 })
+    await expect(playerContainer.locator('text=MDX Components').first()).toBeVisible({ timeout: 5000 })
 
     await page.evaluate(() => { (window as any).__hmr_marker = true })
 
@@ -143,7 +146,7 @@ test.describe.serial('video HMR @dev', () => {
       fs.writeFileSync(dataPath, updatedData + `\n// hmr ${Date.now()}`)
       const markerAlive = await page.evaluate(() => (window as any).__hmr_marker === true)
       if (!markerAlive) return 'full-reload'
-      const visible = await playerContainer.locator('text=HMR DATA EDIT').isVisible().catch(() => false)
+      const visible = await playerContainer.locator('text=HMR DATA EDIT').first().isVisible().catch(() => false)
       return visible ? 'updated' : 'waiting'
     }, { timeout: 15_000, message: 'data.ts HMR: new label did not appear in Player' }).toBe('updated')
   })
@@ -158,7 +161,7 @@ test.describe.serial('video HMR @dev', () => {
     await expect(playerContainer).toBeVisible()
     await page.waitForFunction(() => window.egakiSDK?.seekTo)
     await page.evaluate(() => window.egakiSDK.seekTo(470))
-    await expect(playerContainer.locator('text=Beautiful')).toBeVisible({ timeout: 5000 })
+    await expect(playerContainer.locator('text=Beautiful').first()).toBeVisible({ timeout: 5000 })
 
     await page.evaluate(() => { (window as any).__hmr_marker = true })
 
@@ -175,7 +178,7 @@ test.describe.serial('video HMR @dev', () => {
       fs.writeFileSync(taglinePath, updatedTagline)
       const markerAlive = await page.evaluate(() => (window as any).__hmr_marker === true)
       if (!markerAlive) return 'full-reload'
-      const visible = await playerContainer.locator('text=TAGLINEHMR').isVisible().catch(() => false)
+      const visible = await playerContainer.locator('text=TAGLINEHMR').first().isVisible().catch(() => false)
       return visible ? 'updated' : 'waiting'
     }, { timeout: 15_000, message: 'imported mdx HMR: new text did not appear in Player' }).toBe('updated')
   })
@@ -191,13 +194,13 @@ test.describe.serial('video HMR @dev', () => {
     await expect(playerContainer).toBeVisible()
     await page.waitForFunction(() => window.egakiSDK?.seekTo)
     await page.evaluate(() => window.egakiSDK.seekTo(1200))
-    await expect(playerContainer.locator('text=Pages Built')).toBeVisible({ timeout: 10_000 })
-    await expect(playerContainer.locator('text=100,847')).toBeVisible()
+    await expect(playerContainer.locator('text=Pages Built').first()).toBeVisible({ timeout: 10_000 })
+    await expect(playerContainer.locator('text=100,847').first()).toBeVisible()
 
     // Built-in server component imported via BARE specifier
     // ('egaki/text-to-speech') — resolved through vite at request time.
     // Renders a hidden marker span, so assert attachment not visibility.
-    await expect(playerContainer.locator('[data-egaki-tts]')).toBeAttached()
+    await expect(playerContainer.locator('[data-egaki-tts]').first()).toBeAttached()
   })
 
   test('editing an inferred server file refreshes the slot via rsc:update, no reload', async ({ page }) => {
@@ -208,7 +211,7 @@ test.describe.serial('video HMR @dev', () => {
     await expect(playerContainer).toBeVisible()
     await page.waitForFunction(() => window.egakiSDK?.seekTo)
     await page.evaluate(() => window.egakiSDK.seekTo(1200))
-    await expect(playerContainer.locator('text=100,847')).toBeVisible({ timeout: 10_000 })
+    await expect(playerContainer.locator('text=100,847').first()).toBeVisible({ timeout: 10_000 })
 
     await page.evaluate(() => { (window as any).__hmr_marker = true })
 
@@ -225,7 +228,7 @@ test.describe.serial('video HMR @dev', () => {
       const markerAlive = await page.evaluate(() => (window as any).__hmr_marker === true)
       if (!markerAlive) return 'full-reload'
       await page.evaluate(() => window.egakiSDK.seekTo(1200))
-      const visible = await playerContainer.locator('text=55,555').isVisible().catch(() => false)
+      const visible = await playerContainer.locator('text=55,555').first().isVisible().catch(() => false)
       return visible ? 'updated' : 'waiting'
     }, { timeout: 20_000, message: 'server component HMR: new value did not appear' }).toBe('updated')
   })
@@ -288,7 +291,7 @@ test.describe.serial('video HMR @dev', () => {
       // rename ('MDX Components' becomes 'HMR DATA EDIT' in that test and
       // data.ts is only restored in afterAll).
       await page.evaluate(() => window.egakiSDK.seekTo(1050))
-      const visible = await playerContainer.locator('text=OpenAPI Reference').isVisible().catch(() => false)
+      const visible = await playerContainer.locator('text=OpenAPI Reference').first().isVisible().catch(() => false)
       return visible ? 'updated' : 'waiting'
     }, { timeout: 15_000, message: 'server-rendered FeatureGrid did not appear' }).toBe('updated')
   })
