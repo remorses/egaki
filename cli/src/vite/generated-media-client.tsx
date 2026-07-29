@@ -68,7 +68,12 @@ function ResolvedVideo({ srcPromise, ...rest }: { srcPromise: Promise<string> } 
 
 function ResolvedAudio({ srcPromise, ...rest }: { srcPromise: Promise<string> } & ComponentProps<typeof Audio>) {
   const src = use(srcPromise)
-  return <Audio src={src} {...rest} />
+  return (
+    <>
+      <span data-egaki-tts style={{ display: 'none' }} aria-hidden />
+      <Audio src={src} {...rest} />
+    </>
+  )
 }
 
 // ---------------------------------------------------------------------------
