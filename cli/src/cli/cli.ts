@@ -337,7 +337,7 @@ cli
     z
       .string()
       .describe(
-        'Aspect ratio for the generated image. Imagen supports: 1:1, 3:4, 4:3, 9:16, 16:9. Gemini supports additional ratios: 2:3, 3:2, 4:5, 5:4, 21:9',
+        'Aspect ratio for the generated image. Imagen supports: 1:1, 3:4, 4:3, 9:16, 16:9. Gemini supports additional ratios: 2:3, 3:2, 4:5, 5:4, 21:9. OpenAI models (gpt-image-*, dall-e-*) have no native aspect ratio parameter, so the ratio is snapped to the closest supported size and stated in the prompt text',
       ),
   )
   .option(

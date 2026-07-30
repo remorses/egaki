@@ -8,6 +8,7 @@ import {
   calculateCost,
   buildImageProviderOptions,
   buildVideoProviderOptions,
+  aspectRatioFallback,
   ValidationError,
 } from './generate.js'
 
@@ -141,6 +142,62 @@ describe('buildImageProviderOptions', () => {
       allowPeople: false,
     })
     expect(opts).toEqual({})
+  })
+})
+
+describe('aspectRatioFallback', () => {
+  const openaiSizes = ['1024x1024', '1536x1024', '1024x1536']
+
+  it('leaves the prompt untouched when no aspect ratio is requested', () => {
+    expect(aspectRatioFallback('a sunset', undefined, openaiSizes)).toMatchInlineSnapshot(`
+      {
+        "prompt": "a sunset",
+      }
+    `)
+  })
+
+  it('prepends the ratio and picks the closest landscape size', () => {
+    expect(aspectRatioFallback('a sunset', '16:9', openaiSizes)).toMatchInlineSnapshot(`
+      {
+        "prompt": "Image aspect ratio: 16:9, landscape orientation. a sunset",
+        "size": "1536x1024",
+      }
+    `)
+  })
+
+  it('picks the closest portrait size', () => {
+    expect(aspectRatioFallback('a sunset', '9:16', openaiSizes)).toMatchInlineSnapshot(`
+      {
+        "prompt": "Image aspect ratio: 9:16, portrait orientation. a sunset",
+        "size": "1024x1536",
+      }
+    `)
+  })
+
+  it('picks the square size for 1:1', () => {
+    expect(aspectRatioFallback('a sunset', '1:1', openaiSizes)).toMatchInlineSnapshot(`
+      {
+        "prompt": "Image aspect ratio: 1:1, square orientation. a sunset",
+        "size": "1024x1024",
+      }
+    `)
+  })
+
+  it('still prepends the ratio when the model has no size list', () => {
+    expect(aspectRatioFallback('a sunset', '21:9', [])).toMatchInlineSnapshot(`
+      {
+        "prompt": "Image aspect ratio: 21:9, landscape orientation. a sunset",
+        "size": undefined,
+      }
+    `)
+  })
+
+  it('ignores malformed ratios', () => {
+    expect(aspectRatioFallback('a sunset', '0:0', openaiSizes)).toMatchInlineSnapshot(`
+      {
+        "prompt": "a sunset",
+      }
+    `)
   })
 })
 

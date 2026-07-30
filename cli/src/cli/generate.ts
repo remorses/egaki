@@ -379,23 +379,76 @@ function imageBytesToDataUrl(image: Uint8Array): string {
   return `data:${mediaType};base64,${Buffer.from(image).toString('base64')}`
 }
 
-function chatGptImageSizeFromAspectRatio(
-  aspectRatio: `${number}:${number}`,
-): '1024x1024' | '1536x1024' | '1024x1536' | undefined {
-  switch (aspectRatio) {
-    case '1:1':
-      return '1024x1024'
-    case '3:2':
-      return '1536x1024'
-    case '2:3':
-      return '1024x1536'
-    default:
-      return undefined
-  }
-}
-
 function isAspectRatio(input: string): input is `${number}:${number}` {
   return /^\d+:\d+$/.test(input)
+}
+
+// ─── aspect ratio fallback for models without native support ─────────────────
+//
+// OpenAI image models (gpt-image-*, dall-e-*) reject `aspectRatio`: the AI SDK
+// pushes an "unsupported: aspectRatio" warning and the request falls back to a
+// square image. They accept a fixed `size` list instead, and they also honour a
+// plain-language ratio statement in the prompt text when picking the framing.
+// So for these models we do both: snap to the closest supported size AND state
+// the ratio in the prompt. The prompt hint matters because the supported sizes
+// are coarse (only 3:2 / 1:1 / 2:3), so a request like 16:9 has no exact match
+// and the composition has to come from the prompt.
+//
+// Models with a non-empty `features.aspectRatios` keep the native flag.
+
+const OPENAI_SIZES = ['1024x1024', '1536x1024', '1024x1536'] as const
+
+function ratioValue(aspectRatio: `${number}:${number}`): number | undefined {
+  const [w, h] = aspectRatio.split(':').map(Number)
+  if (!w || !h) return undefined
+  return w / h
+}
+
+function orientationLabel(ratio: number): 'landscape' | 'portrait' | 'square' {
+  if (ratio > 1.02) return 'landscape'
+  if (ratio < 0.98) return 'portrait'
+  return 'square'
+}
+
+/** Pick the supported WIDTHxHEIGHT whose ratio is closest to the requested one. */
+function closestSize(
+  aspectRatio: `${number}:${number}`,
+  sizes: readonly string[],
+): `${number}x${number}` | undefined {
+  const target = ratioValue(aspectRatio)
+  if (target === undefined || sizes.length === 0) return undefined
+
+  let best: string | undefined
+  let bestDistance = Infinity
+  for (const size of sizes) {
+    const [w, h] = size.split('x').map(Number)
+    if (!w || !h) continue
+    // Compare in log space so 2x-too-wide and 2x-too-tall are equally far off.
+    const distance = Math.abs(Math.log(w / h) - Math.log(target))
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = size
+    }
+  }
+  return best as `${number}x${number}` | undefined
+}
+
+/**
+ * Translate an aspect ratio request into a prompt prefix + concrete `size` for
+ * models that have no native aspect ratio parameter.
+ */
+export function aspectRatioFallback(
+  prompt: string,
+  aspectRatio: `${number}:${number}` | undefined,
+  sizes: readonly string[],
+): { prompt: string; size?: `${number}x${number}` } {
+  if (!aspectRatio) return { prompt }
+  const ratio = ratioValue(aspectRatio)
+  if (ratio === undefined) return { prompt }
+  return {
+    prompt: `Image aspect ratio: ${aspectRatio}, ${orientationLabel(ratio)} orientation. ${prompt}`,
+    size: closestSize(aspectRatio, sizes),
+  }
 }
 
 /** Convert any thrown value into an Error instance. */
@@ -568,12 +621,20 @@ async function generateWithImageModel(opts: {
   outputFormat?: string
   negativePrompt?: string
 }): Promise<Error | GenerateImageResult> {
-  const imagePrompt = opts.inputImages.length > 0
-    ? { text: opts.prompt, images: opts.inputImages, ...(opts.maskImage ? { mask: opts.maskImage } : {}) }
-    : opts.prompt
-
   const config = getModelConfig(opts.model)
   if (config instanceof Error) return config
+
+  // Models with an empty `aspectRatios` list have no native aspect ratio
+  // parameter, so the request is expressed through `size` + the prompt text.
+  const features = config.strategy === 'video' ? undefined : config.features
+  const supportsNativeAspectRatio = (features?.aspectRatios?.length ?? 0) > 0
+  const fallback = supportsNativeAspectRatio
+    ? { prompt: opts.prompt, size: undefined }
+    : aspectRatioFallback(opts.prompt, opts.aspectRatio, features?.sizes ?? [])
+
+  const imagePrompt = opts.inputImages.length > 0
+    ? { text: fallback.prompt, images: opts.inputImages, ...(opts.maskImage ? { mask: opts.maskImage } : {}) }
+    : fallback.prompt
 
   const imageModel = await createImageModel(opts.model)
   if (imageModel instanceof Error) return imageModel
@@ -593,7 +654,8 @@ async function generateWithImageModel(opts: {
       model: imageModel,
       prompt: imagePrompt,
       n: opts.count,
-      ...(opts.aspectRatio ? { aspectRatio: opts.aspectRatio } : {}),
+      ...(opts.aspectRatio && supportsNativeAspectRatio ? { aspectRatio: opts.aspectRatio } : {}),
+      ...(fallback.size ? { size: fallback.size } : {}),
       ...(opts.seed !== undefined ? { seed: opts.seed } : {}),
       providerOptions,
     })
@@ -715,10 +777,7 @@ async function generateWithResponsesApi(opts: {
     return new ValidationError('ChatGPT image generation does not support mask yet.')
   }
 
-  const size = opts.aspectRatio ? chatGptImageSizeFromAspectRatio(opts.aspectRatio) : undefined
-  if (opts.aspectRatio && !size) {
-    return new ValidationError('ChatGPT image generation only supports aspect ratios 1:1, 3:2, or 2:3.')
-  }
+  const { prompt, size } = aspectRatioFallback(opts.prompt, opts.aspectRatio, OPENAI_SIZES)
 
   const storedAuth = getChatGptAuth()
   if (!storedAuth?.accountId) {
@@ -729,7 +788,7 @@ async function generateWithResponsesApi(opts: {
   if (auth instanceof Error) return auth
 
   const content: Array<{ type: 'input_text'; text: string } | { type: 'input_image'; image_url: string }> = [
-    { type: 'input_text', text: opts.prompt },
+    { type: 'input_text', text: prompt },
     ...opts.inputImages.map((image) => ({
       type: 'input_image' as const,
       image_url: imageBytesToDataUrl(image),
