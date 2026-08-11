@@ -6,9 +6,10 @@
 // Tokens are stored so egaki can reuse the ChatGPT login for Codex-style
 // backend requests and refresh them when needed.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { spawn } from 'node:child_process'
 import { spinner, log, note } from '@clack/prompts'
-import pc from 'picocolors'
+import { colors as pc } from 'goke'
+import { z } from 'zod'
+import { openUrlInBrowser } from './open-browser.js'
 
 const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
 const ISSUER = 'https://auth.openai.com'
@@ -62,19 +63,26 @@ async function generatePKCE(): Promise<{ verifier: string; challenge: string }> 
   return { verifier, challenge: base64UrlEncode(hash) }
 }
 
-function generateState(): string {
-  return base64UrlEncode(crypto.getRandomValues(new Uint8Array(32)).buffer)
-}
-
 // ─── JWT parsing ─────────────────────────────────────────────────────────────
 
-function parseJwtClaims(token: string): Record<string, unknown> | undefined {
+const jwtClaimsSchema = z.object({
+  email: z.string().optional(),
+  chatgpt_account_id: z.string().optional(),
+  'https://api.openai.com/auth': z.object({
+    chatgpt_account_id: z.string().optional(),
+    chatgpt_plan_type: z.string().optional(),
+  }).optional(),
+})
+
+function parseJwtClaims(token: string): z.infer<typeof jwtClaimsSchema> | undefined {
   const parts = token.split('.')
   if (parts.length !== 3) return undefined
   const payload = parts[1]
   if (!payload) return undefined
   try {
-    return JSON.parse(Buffer.from(payload, 'base64url').toString()) as Record<string, unknown>
+    return jwtClaimsSchema.parse(
+      JSON.parse(Buffer.from(payload, 'base64url').toString()),
+    )
   } catch {
     return undefined
   }
@@ -92,10 +100,8 @@ function extractEmail(tokens: OAuthTokens): string | undefined {
 function extractPlanTypeFromTokens(tokens: OAuthTokens): string | undefined {
   const idClaims = tokens.id_token ? parseJwtClaims(tokens.id_token) : undefined
   const accessClaims = parseJwtClaims(tokens.access_token)
-  const idAuth = idClaims?.['https://api.openai.com/auth'] as { chatgpt_plan_type?: string } | undefined
-  const accessAuth = accessClaims?.['https://api.openai.com/auth'] as
-    | { chatgpt_plan_type?: string }
-    | undefined
+  const idAuth = idClaims?.['https://api.openai.com/auth']
+  const accessAuth = accessClaims?.['https://api.openai.com/auth']
   return idAuth?.chatgpt_plan_type ?? accessAuth?.chatgpt_plan_type
 }
 
@@ -103,10 +109,8 @@ function extractAccountId(tokens: OAuthTokens): string | undefined {
   const idClaims = tokens.id_token ? parseJwtClaims(tokens.id_token) : undefined
   const accessClaims = parseJwtClaims(tokens.access_token)
 
-  const idAuth = idClaims?.['https://api.openai.com/auth'] as Record<string, unknown> | undefined
-  const accessAuth = accessClaims?.['https://api.openai.com/auth'] as
-    | Record<string, unknown>
-    | undefined
+  const idAuth = idClaims?.['https://api.openai.com/auth']
+  const accessAuth = accessClaims?.['https://api.openai.com/auth']
 
   return (
     (typeof idClaims?.chatgpt_account_id === 'string' ? idClaims.chatgpt_account_id : undefined) ??
@@ -124,9 +128,7 @@ function extractAccountId(tokens: OAuthTokens): string | undefined {
 export function extractPlanType(auth: ChatGptAuth): string | undefined {
   if (auth.plan) return auth.plan
   const claims = parseJwtClaims(auth.access)
-  const authClaim = claims?.['https://api.openai.com/auth'] as
-    | { chatgpt_plan_type?: string }
-    | undefined
+  const authClaim = claims?.['https://api.openai.com/auth']
   return authClaim?.chatgpt_plan_type
 }
 
@@ -278,23 +280,21 @@ function waitForOAuthCallback(verifier: string, state: string): Promise<OAuthTok
   })
 }
 
-function openBrowser(url: string): void {
-  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open'
-  const child = spawn(cmd, [url], { detached: true, stdio: 'ignore' })
-  child.unref()
-}
-
 // ─── public API ──────────────────────────────────────────────────────────────
 
 /**
  * Run the full ChatGPT OAuth browser flow with clack UI.
  * Returns the ChatGptAuth object to be stored in credentials.json.
  */
-export async function chatGptOAuthLogin(): Promise<ChatGptAuth> {
+export async function chatGptOAuthLogin({
+  openInBackground = false,
+} = {}): Promise<ChatGptAuth> {
   await startOAuthServer()
 
   const pkce = await generatePKCE()
-  const state = generateState()
+  const state = base64UrlEncode(
+    crypto.getRandomValues(new Uint8Array(32)).buffer,
+  )
   const authUrl = buildAuthorizeUrl(pkce, state)
   const callbackPromise = waitForOAuthCallback(pkce.verifier, state)
 
@@ -305,7 +305,17 @@ export async function chatGptOAuthLogin(): Promise<ChatGptAuth> {
     'ChatGPT OAuth',
   )
 
-  openBrowser(authUrl)
+  const opened = openUrlInBrowser(authUrl, {
+    allowNonInteractive: openInBackground,
+  })
+  if (openInBackground && !opened) {
+    const error = new Error('Could not open a browser for ChatGPT authorization')
+    pendingOAuth?.reject(error)
+    pendingOAuth = undefined
+    await stopOAuthServer()
+    await callbackPromise
+    throw error
+  }
 
   const s = spinner()
   s.start('Waiting for authorization in browser...')

@@ -7,7 +7,12 @@
 //   - imagen-* models → generateImage() with google.image()
 //   - all other models → generateText() with responseModalities: ['IMAGE']
 // The CLI auto-detects which path to use based on model ID prefix.
-import { goke } from 'goke'
+import {
+  colors as pc,
+  goke,
+  isAgent,
+  type GokeExecutionContext,
+} from 'goke'
 import { z } from 'zod'
 import dedent from 'string-dedent'
 import {
@@ -19,7 +24,6 @@ import {
 import { select, isCancel, cancel } from '@clack/prompts'
 import fs from 'node:fs'
 import path from 'node:path'
-import pc from 'picocolors'
 import pkg from '../../package.json' with { type: 'json' }
 import {
   injectCredentialsToEnv,
@@ -39,6 +43,7 @@ import {
 import {
   loginInteractive,
   loginNonInteractive,
+  resolveLoginAction,
   showLoginStatus,
   removeLogin,
   readKeyFromStdin,
@@ -116,8 +121,8 @@ cli
     dedent`
       Configure API keys for image generation providers.
       Interactive mode: shows a provider picker and secure key input.
-      Non-interactive mode: pass --provider and --key flags, or pipe key via stdin.
-      Keys are saved to ~/.config/egaki/credentials.json (mode 0600).
+      Non-interactive mode: pass \`--provider\` and \`--key\`, or pipe the key via stdin.
+      Browser OAuth runs in the background for AI agents and non-TTY shells.
     `,
   )
   .option(
@@ -148,32 +153,100 @@ cli
   .example('egaki login --show')
   .example('# Remove a stored key')
   .example('egaki login --remove google')
-  .action(async (options) => {
-    if (options.show) {
-      showLoginStatus()
+  .action(async (options, ctx) => {
+    const action = resolveLoginAction({
+      options,
+      daemonProvider: ctx.daemon.isDaemon
+        ? ctx.process.env.EGAKI_LOGIN_PROVIDER
+        : undefined,
+      isAgent: isAgent || !process.stdin.isTTY,
+    })
+    if (action instanceof Error) {
+      ctx.console.error(action.message)
+      ctx.process.exit(1)
       return
     }
 
-    if (options.remove) {
-      removeLogin(options.remove)
+    if (action.type === 'show') {
+      showLoginStatus({ loginRunning: await ctx.daemon.isRunning() })
+      return
+    }
+    if (action.type === 'remove') {
+      removeLogin(action.provider)
+      return
+    }
+    if (action.type === 'oauth-daemon') {
+      await loginNonInteractive({
+        provider: action.provider,
+        key: '',
+        background: true,
+      })
+      return
+    }
+    if (action.type === 'oauth-client') {
+      await startOAuthLogin({ provider: action.provider, ctx })
+      return
+    }
+    if (action.type === 'api-key') {
+      await loginNonInteractive({
+        provider: action.provider,
+        key: action.key || (await readKeyFromStdin()),
+      })
       return
     }
 
-    // Non-interactive: --provider + --key or stdin
-    if (options.provider) {
-      // OAuth providers use browser flow — skip key reading
-      if (options.provider === 'chatgpt' || options.provider === 'xai-oauth') {
-        await loginNonInteractive({ provider: options.provider, key: '' })
-        return
-      }
-      const key = options.key || (await readKeyFromStdin())
-      await loginNonInteractive({ provider: options.provider, key })
-      return
-    }
-
-    // Interactive mode
-    await loginInteractive()
+    await loginInteractive({
+      loginOAuth: (provider) => startOAuthLogin({ provider, ctx }),
+    })
   })
+
+cli
+  .command(
+    'login status <provider>',
+    'Check one provider login. Exits with status 1 when login is not complete.',
+  )
+  .example('egaki login status chatgpt')
+  .example('egaki login status xai-oauth')
+  .action(async (provider, _options, ctx) => {
+    const info = PROVIDERS[provider]
+    if (!info) {
+      ctx.console.error(`Unknown provider: ${provider}`)
+      ctx.process.exit(1)
+      return
+    }
+
+    const status = getKeyStatus(provider)
+    if (status.available) {
+      ctx.console.log(`${info.label} is configured.`)
+      return
+    }
+
+    const loginRunning = await ctx.daemon.forCommand('login').isRunning()
+    ctx.console.error(
+      loginRunning
+        ? `An OAuth login is running, but ${info.label} is not configured yet.`
+        : `${info.label} is not configured.`,
+    )
+    ctx.process.exit(1)
+  })
+
+async function startOAuthLogin({
+  provider,
+  ctx,
+}: {
+  provider: string
+  ctx: GokeExecutionContext
+}) {
+  const runInBackground = isAgent || !process.stdin.isTTY
+  await ctx.daemon.start({
+    attach: !runInBackground,
+    timeoutMs: 10 * 60 * 1000,
+    env: { EGAKI_LOGIN_PROVIDER: provider },
+  })
+  if (!runInBackground) return
+  ctx.console.log('Login is running in the background and the browser will open.')
+  ctx.console.log(`After approval, verify with: egaki login status ${provider}`)
+}
 
 // ─── subscribe command ───────────────────────────────────────────────────────
 
@@ -1475,6 +1548,7 @@ const UPLOAD_GATEWAY_BASE = 'https://egaki.org'
 const MAX_UPLOAD_SIZE = 100 * 1024 * 1024
 
 cli.help()
+cli.completions()
 cli.version(pkg.version)
 
 export { cli }

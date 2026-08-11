@@ -12,7 +12,7 @@
 // when creating the @ai-sdk/xai provider instance.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { spinner, log, note } from '@clack/prompts'
-import pc from 'picocolors'
+import { colors as pc } from 'goke'
 import { z } from 'zod'
 import { openUrlInBrowser } from './open-browser.js'
 import pkg from '../../package.json' with { type: 'json' }
@@ -291,7 +291,9 @@ function waitForOAuthCallback(
  * Run the xAI OAuth browser flow. Opens the system browser for authorization,
  * waits for the callback, and returns an XaiAuth object with tokens.
  */
-export async function xaiOAuthLogin(): Promise<XaiAuth> {
+export async function xaiOAuthLogin({
+  openInBackground = false,
+} = {}): Promise<XaiAuth> {
   const s = spinner()
   s.start('Starting xAI OAuth server...')
 
@@ -335,7 +337,17 @@ export async function xaiOAuthLogin(): Promise<XaiAuth> {
   // creates a race where the callback arrives before pendingOAuth exists.
   const callbackPromise = waitForOAuthCallback(pkce.verifier, state)
 
-  await openUrlInBrowser(authUrl)
+  const opened = openUrlInBrowser(authUrl, {
+    allowNonInteractive: openInBackground,
+  })
+  if (openInBackground && !opened) {
+    const error = new Error('Could not open a browser for xAI authorization')
+    pendingOAuth?.reject(error)
+    pendingOAuth = undefined
+    server.close()
+    await callbackPromise
+    throw error
+  }
 
   s.start('Waiting for authorization...')
   try {

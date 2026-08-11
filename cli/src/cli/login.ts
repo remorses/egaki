@@ -1,7 +1,7 @@
 // Login command — interactive and non-interactive API key management.
 // Interactive mode uses clack prompts for provider selection and key input.
 // Non-interactive mode supports --provider + --key flags and stdin piping.
-// ChatGPT OAuth uses a browser flow instead of pasting a key.
+// OAuth providers run through the login command's goke daemon.
 import {
   intro,
   outro,
@@ -12,7 +12,7 @@ import {
   log,
   note,
 } from '@clack/prompts'
-import pc from 'picocolors'
+import { colors as pc } from 'goke'
 import {
   PROVIDERS,
   saveProviderKey,
@@ -26,7 +26,55 @@ import {
 import { chatGptOAuthLogin, extractPlanType } from './chatgpt-auth.js'
 import { xaiOAuthLogin } from './xai-auth.js'
 
-export async function loginInteractive(): Promise<void> {
+type LoginAction =
+  | { type: 'show' }
+  | { type: 'remove'; provider: string }
+  | { type: 'oauth-daemon'; provider: string }
+  | { type: 'oauth-client'; provider: string }
+  | { type: 'api-key'; provider: string; key: string | undefined }
+  | { type: 'interactive' }
+
+function isOAuthProvider(provider: string) {
+  return provider === 'chatgpt' || provider === 'xai-oauth'
+}
+
+export function resolveLoginAction({
+  options,
+  daemonProvider,
+  isAgent,
+}: {
+  options: {
+    provider?: string
+    key?: string
+    show?: boolean
+    remove?: string
+  }
+  daemonProvider: string | undefined
+  isAgent: boolean
+}): LoginAction | Error {
+  if (options.show) return { type: 'show' }
+  if (options.remove) return { type: 'remove', provider: options.remove }
+  if (daemonProvider && !isOAuthProvider(daemonProvider)) {
+    return new Error(`Invalid background login provider: ${daemonProvider}`)
+  }
+  if (daemonProvider) return { type: 'oauth-daemon', provider: daemonProvider }
+  if (options.provider && isOAuthProvider(options.provider)) {
+    return { type: 'oauth-client', provider: options.provider }
+  }
+  if (options.provider) {
+    return { type: 'api-key', provider: options.provider, key: options.key }
+  }
+  if (isAgent) {
+    return new Error('Missing --provider. Run egaki login --provider <name>.')
+  }
+  return { type: 'interactive' }
+}
+
+export async function loginInteractive({
+  loginOAuth,
+}: {
+  loginOAuth: (provider: string) => Promise<void>
+}): Promise<void> {
   intro(pc.bold('egaki login'))
 
   const providerOptions = Object.entries(PROVIDERS).map(([key, info]) => {
@@ -82,17 +130,13 @@ export async function loginInteractive(): Promise<void> {
 
   // ChatGPT uses browser OAuth instead of key paste
   if (provider === 'chatgpt') {
-    const auth = await chatGptOAuthLogin()
-    saveChatGptAuth(auth)
-    outro('Done — ChatGPT OAuth saved')
+    await loginOAuth(provider)
     return
   }
 
   // xAI Grok Build uses browser OAuth
   if (provider === 'xai-oauth') {
-    const auth = await xaiOAuthLogin()
-    saveXaiAuth(auth)
-    outro('Done — xAI OAuth saved')
+    await loginOAuth(provider)
     return
   }
 
@@ -129,9 +173,11 @@ export async function loginInteractive(): Promise<void> {
 export async function loginNonInteractive({
   provider,
   key,
+  background = false,
 }: {
   provider: string
   key: string
+  background?: boolean
 }): Promise<void> {
   const info = PROVIDERS[provider]
   if (!info) {
@@ -144,7 +190,7 @@ export async function loginNonInteractive({
 
   // ChatGPT uses browser OAuth — key flag is not needed
   if (provider === 'chatgpt') {
-    const auth = await chatGptOAuthLogin()
+    const auth = await chatGptOAuthLogin({ openInBackground: background })
     saveChatGptAuth(auth)
     console.log(pc.green('ChatGPT OAuth saved'))
     return
@@ -152,7 +198,7 @@ export async function loginNonInteractive({
 
   // xAI Grok Build uses browser OAuth — key flag is not needed
   if (provider === 'xai-oauth') {
-    const auth = await xaiOAuthLogin()
+    const auth = await xaiOAuthLogin({ openInBackground: background })
     saveXaiAuth(auth)
     console.log(pc.green('xAI OAuth saved'))
     return
@@ -167,7 +213,8 @@ export async function loginNonInteractive({
   console.log(pc.green(`${info.label} key saved`))
 }
 
-export function showLoginStatus(): void {
+export function showLoginStatus({ loginRunning = false } = {}): void {
+  if (loginRunning) console.log(pc.cyan('OAuth login is running in the background.\n'))
   console.log(pc.bold('Configured providers:\n'))
 
   for (const [key, info] of Object.entries(PROVIDERS)) {

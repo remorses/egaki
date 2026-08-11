@@ -2,12 +2,10 @@
 // Never throws: missing OS commands are handled gracefully.
 import { spawnSync } from 'node:child_process'
 
-type OpenCommand = {
+function getOpenCommands(url: string): Array<{
   command: string
   args: string[]
-}
-
-function getOpenCommands(url: string): OpenCommand[] {
+}> {
   if (process.platform === 'darwin') {
     return [{ command: 'open', args: [url] }]
   }
@@ -23,9 +21,12 @@ function getOpenCommands(url: string): OpenCommand[] {
   ]
 }
 
-export function openUrlInBrowser(url: string): boolean {
+export function openUrlInBrowser(
+  url: string,
+  { allowNonInteractive = false } = {},
+): boolean {
   // Avoid launching browser commands in non-interactive contexts (CI/pipes).
-  if (!process.stdout.isTTY || !process.stdin.isTTY) {
+  if (!allowNonInteractive && (!process.stdout.isTTY || !process.stdin.isTTY)) {
     return false
   }
 
