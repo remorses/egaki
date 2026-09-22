@@ -47,6 +47,7 @@ import {
   getValidChatGptAuth,
   isRevokedChatGptAccessToken,
   refreshChatGptToken,
+  resolveChatGptResponsesModel,
 } from './chatgpt-auth.js'
 
 // ─── autocomplete-friendly union types ───────────────────────────────────────
@@ -800,8 +801,11 @@ async function generateWithResponsesApi(opts: {
     })),
   ]
 
-  const requestBody = JSON.stringify({
-    model: 'gpt-5.4',
+  const responsesModel = await resolveChatGptResponsesModel({ auth })
+  if (responsesModel instanceof Error) return responsesModel
+
+  const requestBodyFor = (model: string) => JSON.stringify({
+    model,
     instructions: 'You are Codex.',
     input: [
       {
@@ -828,7 +832,15 @@ async function generateWithResponsesApi(opts: {
     include: [],
   })
 
-  const post = (access: string, accountId: string | undefined) => {
+  const post = ({
+    access,
+    accountId,
+    body,
+  }: {
+    access: string
+    accountId: string | undefined
+    body: string
+  }) => {
     const headers = new Headers({
       Authorization: `Bearer ${access}`,
       'Content-Type': 'application/json',
@@ -837,29 +849,58 @@ async function generateWithResponsesApi(opts: {
     return fetch('https://chatgpt.com/backend-api/codex/responses', {
       method: 'POST',
       headers,
-      body: requestBody,
+      body,
     })
   }
 
+  let activeModel = responsesModel
   let response: Response
   try {
-    response = await post(auth.access, auth.accountId)
+    response = await post({
+      access: auth.access,
+      accountId: auth.accountId,
+      body: requestBodyFor(activeModel),
+    })
   } catch (err) {
     return toError(err)
   }
 
   if (!response.ok || !response.body) {
     const body = await response.text().catch(() => '')
-    if (!isRevokedChatGptAccessToken(response.status, body)) {
-      return new Error(`ChatGPT image generation failed: ${response.status}${body ? ` ${body}` : ''}`)
-    }
-    const refreshed = await refreshChatGptToken(auth)
-    if (refreshed instanceof Error) return refreshed
-    saveChatGptAuth(refreshed)
-    try {
-      response = await post(refreshed.access, refreshed.accountId)
-    } catch (err) {
-      return toError(err)
+    if (!(response.status === 400 && body.includes('not supported'))) {
+      if (!isRevokedChatGptAccessToken(response.status, body)) {
+        return new Error(`ChatGPT image generation failed: ${response.status}${body ? ` ${body}` : ''}`)
+      }
+      const refreshed = await refreshChatGptToken(auth)
+      if (refreshed instanceof Error) return refreshed
+      saveChatGptAuth(refreshed)
+      try {
+        response = await post({
+          access: refreshed.access,
+          accountId: refreshed.accountId,
+          body: requestBodyFor(activeModel),
+        })
+      } catch (err) {
+        return toError(err)
+      }
+    } else {
+      const nextModel = await resolveChatGptResponsesModel({
+        auth,
+        exclude: [activeModel],
+      })
+      if (nextModel instanceof Error) {
+        return new Error(`ChatGPT image generation failed: ${response.status} ${body}`)
+      }
+      activeModel = nextModel
+      try {
+        response = await post({
+          access: auth.access,
+          accountId: auth.accountId,
+          body: requestBodyFor(activeModel),
+        })
+      } catch (err) {
+        return toError(err)
+      }
     }
     if (!response.ok || !response.body) {
       const retryBody = await response.text().catch(() => '')

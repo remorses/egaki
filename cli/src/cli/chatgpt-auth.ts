@@ -223,6 +223,94 @@ export function chatGptReLoginMessage({
   return `ChatGPT rejected the saved login (${status}${detail ? `: ${detail}` : ''}). Run: egaki login --provider chatgpt`
 }
 
+export type ChatGptResponsesModel = {
+  slug: string
+  visibility?: string
+  priority?: number
+  supportedInApi?: boolean
+  plans?: string[]
+}
+
+// ChatGPT accounts reject a fixed slug such as gpt-5.4. Use the account's
+// current models list and pick the highest-priority listed model.
+export function pickChatGptResponsesModel({
+  models,
+  plan,
+  exclude = [],
+}: {
+  models: ChatGptResponsesModel[]
+  plan: string | undefined
+  exclude?: string[]
+}): string | null {
+  const ranked = models
+    .filter((model) => {
+      if (!model.slug || exclude.includes(model.slug)) return false
+      if (model.visibility && model.visibility !== 'list') return false
+      if (model.supportedInApi === false) return false
+      if (plan && model.plans && !model.plans.includes(plan)) return false
+      return true
+    })
+    .sort((a, b) => (a.priority ?? 1_000) - (b.priority ?? 1_000))
+  return ranked[0]?.slug ?? null
+}
+
+export async function resolveChatGptResponsesModel({
+  auth,
+  exclude = [],
+}: {
+  auth: ChatGptAuth
+  exclude?: string[]
+}): Promise<string | Error> {
+  const headers = new Headers({
+    Authorization: `Bearer ${auth.access}`,
+  })
+  if (auth.accountId) headers.set('ChatGPT-Account-ID', auth.accountId)
+  const response = await fetch(
+    'https://chatgpt.com/backend-api/codex/models?client_version=0.0.0',
+    { headers },
+  ).catch((err) => err instanceof Error ? err : new Error(String(err)))
+  if (response instanceof Error) return response
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    if (response.status === 401) {
+      return new Error(chatGptReLoginMessage({ status: response.status, body }))
+    }
+    return new Error(
+      `ChatGPT model list failed: ${response.status}${body ? ` ${body}` : ''}`,
+    )
+  }
+  const json = (await response.json()) as {
+    models?: Array<{
+      slug?: string
+      visibility?: string
+      priority?: number
+      supported_in_api?: boolean
+      available_in_plans?: string[]
+    }>
+  }
+  const slug = pickChatGptResponsesModel({
+    models: (json.models ?? []).flatMap((model) =>
+      model.slug
+        ? [{
+            slug: model.slug,
+            visibility: model.visibility,
+            priority: model.priority,
+            supportedInApi: model.supported_in_api,
+            plans: model.available_in_plans,
+          }]
+        : [],
+    ),
+    plan: auth.plan,
+    exclude,
+  })
+  if (!slug) {
+    return new Error(
+      'No ChatGPT model is available for image generation. Run: egaki login --provider chatgpt',
+    )
+  }
+  return slug
+}
+
 // ─── local callback server ───────────────────────────────────────────────────
 
 const HTML_SUCCESS = `<!doctype html>

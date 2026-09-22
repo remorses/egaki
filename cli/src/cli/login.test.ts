@@ -4,6 +4,7 @@ import {
   chatGptReLoginMessage,
   isRevokedChatGptAccessToken,
   oauthCallbackAction,
+  pickChatGptResponsesModel,
 } from './chatgpt-auth.js'
 import { describeChatGptExpiry, resolveLoginAction } from './login.js'
 
@@ -151,6 +152,25 @@ describe('resolveLoginAction', () => {
       error: null,
       code: 'auth-code',
     })).toBe('exchange')
+  })
+
+  test('picks the highest-priority ChatGPT model for the saved plan', () => {
+    expect(pickChatGptResponsesModel({
+      plan: 'prolite',
+      models: [
+        { slug: 'gpt-5.4', visibility: 'hide', priority: 0, plans: ['prolite'] },
+        { slug: 'gpt-6-astra', visibility: 'list', priority: 1, plans: ['prolite'] },
+        { slug: 'gpt-5.5', visibility: 'list', priority: 12, plans: ['pro'] },
+      ],
+    })).toBe('gpt-6-astra')
+    expect(pickChatGptResponsesModel({
+      plan: 'prolite',
+      exclude: ['gpt-6-astra'],
+      models: [
+        { slug: 'gpt-6-astra', visibility: 'list', priority: 1, plans: ['prolite'] },
+        { slug: 'gpt-5.5', visibility: 'list', priority: 12, plans: ['prolite'] },
+      ],
+    })).toBe('gpt-5.5')
   })
 
   test('does not open an interactive prompt for an agent', () => {
