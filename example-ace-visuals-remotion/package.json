@@ -1,0 +1,20 @@
+{
+  "name": "example-ace-visuals-remotion",
+  "description": "Standalone Remotion Studio version of the Float recreation",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tuistory -- remotion studio index.ts --port 5209",
+    "build": "tsc",
+    "render": "remotion render index.ts Float out/float.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.521",
+    "@remotion/media": "4.0.521",
+    "bezier-easing": "3.1.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "remotion": "4.0.521"
+  }
+}
