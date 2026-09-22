@@ -77,6 +77,27 @@ export function StradaShot() {
   )
 }
 
+/** OpenSession — dark landing page, cinematic dark bg. */
+export function OpenSessionShot() {
+  return (
+    <Shot
+      src='/inputs/opensession.png'
+      bg='#060a0c'
+      perspective={780}
+      rotateX={9}
+      rotateY={-19}
+      translateZ={180}
+      aperture={0.35}
+      maxBlur={0.1}
+      focus={0.6}
+      grain={0.03}
+      chromaticAberration={0.5}
+      fog={0.3}
+      width='88%'
+    />
+  )
+}
+
 /** Spiceflow — props dialed in via tweakpane (frame 40). */
 export function SpiceflowShot() {
   return (
