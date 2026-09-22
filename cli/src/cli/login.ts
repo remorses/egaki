@@ -213,6 +213,11 @@ export async function loginNonInteractive({
   console.log(pc.green(`${info.label} key saved`))
 }
 
+export function describeChatGptExpiry(expires: number, now: number): string {
+  if (expires < now) return 'expired locally, the next request will try to refresh'
+  return 'not expired locally'
+}
+
 export function showLoginStatus({ loginRunning = false } = {}): void {
   if (loginRunning) console.log(pc.cyan('OAuth login is running in the background.\n'))
   console.log(pc.bold('Configured providers:\n'))
@@ -225,10 +230,10 @@ export function showLoginStatus({ loginRunning = false } = {}): void {
       if (auth) {
         const plan = extractPlanType(auth)
         const email = auth.email ?? auth.accountId ?? 'unknown'
-        const expired = auth.expires < Date.now()
-        const expiryLabel = expired
-          ? pc.yellow('(token expired, will auto-refresh)')
-          : pc.dim(`(token valid)`)
+        const expiryText = describeChatGptExpiry(auth.expires, Date.now())
+        const expiryLabel = auth.expires < Date.now()
+          ? pc.yellow(`(${expiryText})`)
+          : pc.dim(`(${expiryText})`)
         console.log(`${pc.green('*')} ${info.label} ${pc.green('(signed in)')}`)
         console.log(pc.dim(`  account: ${email}${plan ? `, plan: ${plan}` : ''}`))
         console.log(`  ${expiryLabel}`)

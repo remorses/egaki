@@ -42,7 +42,12 @@ import {
 } from './models.js'
 
 export { ValidationError }
-import { getValidChatGptAuth } from './chatgpt-auth.js'
+import {
+  chatGptReLoginMessage,
+  getValidChatGptAuth,
+  isRevokedChatGptAccessToken,
+  refreshChatGptToken,
+} from './chatgpt-auth.js'
 
 // ─── autocomplete-friendly union types ───────────────────────────────────────
 // `(string & {})` lets users pass arbitrary strings (new models, custom
@@ -795,51 +800,76 @@ async function generateWithResponsesApi(opts: {
     })),
   ]
 
+  const requestBody = JSON.stringify({
+    model: 'gpt-5.4',
+    instructions: 'You are Codex.',
+    input: [
+      {
+        type: 'message',
+        role: 'user',
+        content,
+      },
+    ],
+    tools: [
+      {
+        type: 'image_generation',
+        model: opts.model,
+        quality: 'auto',
+        output_format: 'png',
+        output_compression: 100,
+        moderation: 'auto',
+        size: size ?? 'auto',
+      },
+    ],
+    tool_choice: 'auto',
+    parallel_tool_calls: true,
+    stream: true,
+    store: false,
+    include: [],
+  })
+
+  const post = (access: string, accountId: string | undefined) => {
+    const headers = new Headers({
+      Authorization: `Bearer ${access}`,
+      'Content-Type': 'application/json',
+    })
+    if (accountId) headers.set('ChatGPT-Account-ID', accountId)
+    return fetch('https://chatgpt.com/backend-api/codex/responses', {
+      method: 'POST',
+      headers,
+      body: requestBody,
+    })
+  }
+
   let response: Response
   try {
-    response = await fetch('https://chatgpt.com/backend-api/codex/responses', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${auth.access}`,
-      ...(auth.accountId && { 'ChatGPT-Account-ID': auth.accountId }),
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'gpt-5.4',
-      instructions: 'You are Codex.',
-      input: [
-        {
-          type: 'message',
-          role: 'user',
-          content,
-        },
-      ],
-      tools: [
-        {
-          type: 'image_generation',
-          model: opts.model,
-          size: 'auto',
-          quality: 'auto',
-          output_format: 'png',
-          output_compression: 100,
-          moderation: 'auto',
-          ...(size ? { size } : {}),
-        },
-      ],
-      tool_choice: 'auto',
-      parallel_tool_calls: true,
-      stream: true,
-      store: false,
-      include: [],
-    }),
-  })
+    response = await post(auth.access, auth.accountId)
   } catch (err) {
     return toError(err)
   }
 
   if (!response.ok || !response.body) {
     const body = await response.text().catch(() => '')
-    return new Error(`ChatGPT image generation failed: ${response.status}${body ? ` ${body}` : ''}`)
+    if (!isRevokedChatGptAccessToken(response.status, body)) {
+      return new Error(`ChatGPT image generation failed: ${response.status}${body ? ` ${body}` : ''}`)
+    }
+    const refreshed = await refreshChatGptToken(auth)
+    if (refreshed instanceof Error) return refreshed
+    saveChatGptAuth(refreshed)
+    try {
+      response = await post(refreshed.access, refreshed.accountId)
+    } catch (err) {
+      return toError(err)
+    }
+    if (!response.ok || !response.body) {
+      const retryBody = await response.text().catch(() => '')
+      if (isRevokedChatGptAccessToken(response.status, retryBody)) {
+        return new Error(chatGptReLoginMessage({ status: response.status, body: retryBody }))
+      }
+      return new Error(
+        `ChatGPT image generation failed: ${response.status}${retryBody ? ` ${retryBody}` : ''}`,
+      )
+    }
   }
 
   let imageBase64: string | undefined

@@ -1,6 +1,11 @@
 // Tests login command routing before any prompt, key read, or OAuth side effect.
 import { describe, expect, test } from 'vitest'
-import { resolveLoginAction } from './login.js'
+import {
+  chatGptReLoginMessage,
+  isRevokedChatGptAccessToken,
+  oauthCallbackAction,
+} from './chatgpt-auth.js'
+import { describeChatGptExpiry, resolveLoginAction } from './login.js'
 
 describe('resolveLoginAction', () => {
   test('shows all configured providers', () => {
@@ -102,6 +107,50 @@ describe('resolveLoginAction', () => {
         "type": "interactive",
       }
     `)
+  })
+
+  test('does not call a locally unexpired ChatGPT token valid', () => {
+    expect(describeChatGptExpiry(2_000, 1_000)).toMatchInlineSnapshot(
+      `"not expired locally"`,
+    )
+    expect(describeChatGptExpiry(1_000, 2_000)).toMatchInlineSnapshot(
+      `"expired locally, the next request will try to refresh"`,
+    )
+  })
+
+  test('tells the user to sign in again when ChatGPT revokes the token', () => {
+    expect(isRevokedChatGptAccessToken(
+      401,
+      '{"message":"Encountered invalidated oauth token for user, failing request","code":"token_revoked"}',
+    )).toBe(true)
+    expect(isRevokedChatGptAccessToken(401, 'missing api key')).toBe(false)
+    expect(chatGptReLoginMessage({
+      status: 401,
+      body: 'Token refresh failed',
+    })).toMatchInlineSnapshot(
+      `"ChatGPT rejected the saved login (401: Token refresh failed). Run: egaki login --provider chatgpt"`,
+    )
+  })
+
+  test('a stale callback does not cancel the active ChatGPT login', () => {
+    expect(oauthCallbackAction({
+      pendingState: 'new-state',
+      callbackState: 'old-state',
+      error: 'access_denied',
+      code: null,
+    })).toBe('ignore')
+    expect(oauthCallbackAction({
+      pendingState: 'new-state',
+      callbackState: 'new-state',
+      error: 'access_denied',
+      code: null,
+    })).toBe('provider-error')
+    expect(oauthCallbackAction({
+      pendingState: 'new-state',
+      callbackState: 'new-state',
+      error: null,
+      code: 'auth-code',
+    })).toBe('exchange')
   })
 
   test('does not open an interactive prompt for an agent', () => {
