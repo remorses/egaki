@@ -26,5 +26,22 @@
   "routes": [
     { "pattern": "egaki.org", "custom_domain": true },
     { "pattern": "www.egaki.org", "custom_domain": true }
-  ]
+  ],
+
+  "env": {
+    "preview": {
+      "name": "egaki-docs-preview",
+      "routes": [],
+      "observability": {
+        "traces": { "enabled": true }
+      },
+      "vars": {
+        "STRADA_PROJECT_ID": "01KYP8AMJF2MX4VYRK2RTRACJH",
+        "ENVIRONMENT": "preview"
+      },
+      "secrets": {
+        "required": ["STRADA_TOKEN"]
+      }
+    }
+  }
 }

@@ -3,11 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "sigillo run -c dev -- wrangler dev",
     "typecheck": "tsc",
     "types": "wrangler types",
-    "deploy": "tsc && wrangler deploy",
-    "secrets": "wrangler secret bulk .env"
+    "deploy": "tsc && wrangler deploy --env preview",
+    "deploy:prod": "tsc && wrangler deploy",
+    "secrets": "sigillo secrets download -c prod --format env | wrangler secret bulk --env=\"\"",
+    "secrets:preview": "sigillo secrets download -c preview --format env | wrangler secret bulk --env preview"
   },
   "dependencies": {
     "@strada.sh/sdk": "^0.5.0",

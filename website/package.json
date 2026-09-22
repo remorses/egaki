@@ -3,11 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "sigillo run -c dev -- vite dev",
     "generate-cli-docs": "tsx scripts/generate-cli-docs.ts",
     "build": "pnpm generate-cli-docs && tsc && vite build",
-    "start": "node dist/rsc/index.js",
-    "deploy": "pnpm build && wrangler deploy",
+    "start": "sigillo run -c dev -- node dist/rsc/index.js",
+    "deploy": "CLOUDFLARE_ENV=preview pnpm build && wrangler deploy --env preview",
+    "deploy:prod": "pnpm build && wrangler deploy",
+    "secrets": "sigillo secrets download -c prod --format env | wrangler secret bulk --env=\"\"",
+    "secrets:preview": "sigillo secrets download -c preview --format env | wrangler secret bulk --env preview",
     "typecheck": "tsc"
   },
   "dependencies": {

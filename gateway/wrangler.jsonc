@@ -22,7 +22,7 @@
 
   // Declared secrets are typed as `string` on the global Env by `wrangler
   // types`, and `wrangler deploy` refuses to deploy when one is unset.
-  // Values are managed in Doppler and uploaded with `pnpm secrets`.
+  // Values are managed in Sigillo and uploaded with `pnpm secrets`.
   "secrets": {
     "required": [
       "AI_GATEWAY_API_KEY",
@@ -74,5 +74,51 @@
     { "pattern": "egaki.org/buy*", "zone_name": "egaki.org" },
     { "pattern": "egaki.org/success*", "zone_name": "egaki.org" },
     { "pattern": "egaki.org/stripe/*", "zone_name": "egaki.org" }
-  ]
+  ],
+
+  "env": {
+    "preview": {
+      "name": "egaki-gateway-preview",
+      "routes": [],
+      "observability": {
+        "traces": { "enabled": true }
+      },
+      "vars": {
+        "STRADA_PROJECT_ID": "01KYP8AMJF2MX4VYRK2RTRACJH",
+        "ENVIRONMENT": "preview"
+      },
+      "secrets": {
+        "required": [
+          "AI_GATEWAY_API_KEY",
+          "STRIPE_SECRET_KEY",
+          "STRIPE_WEBHOOK_SECRET",
+          "RESEND_API_KEY",
+          "RESEND_FROM",
+          "STRADA_TOKEN"
+        ]
+      },
+      "kv_namespaces": [
+        {
+          "binding": "EGAKI_KV",
+          "id": "29ab987dff8d4612b4c96fab00c6d850"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "EGAKI_UPLOADS",
+          "bucket_name": "egaki-uploads-preview"
+        }
+      ],
+      "unsafe": {
+        "bindings": [
+          {
+            "name": "RATE_LIMITER",
+            "type": "ratelimit",
+            "namespace_id": "1",
+            "simple": { "period": 60, "limit": 30 }
+          }
+        ]
+      }
+    }
+  }
 }

@@ -14,13 +14,14 @@ This AGENTS.md only contains internal development rules and architecture details
 ## Deploying the website
 
 The website deploys via Cloudflare Workers (wrangler), not Holocron deploy.
-Run from the `website/` directory:
+Run production deploys from the `website/` directory:
 
 ```bash
-cd website && pnpm deploy
+cd website && pnpm deploy:prod
 ```
 
-This runs `pnpm build && wrangler deploy`. Never use `holocron deploy` for this project.
+`pnpm deploy` targets the isolated preview Worker. Never use `holocron deploy`
+for this project.
 
 ## Strada observability
 
@@ -145,10 +146,16 @@ and dollar-based usage tracking.
 cross-directory import at build time, so there's no duplication. When you add or
 update models in the catalog, the gateway picks up the costs automatically.
 
-**Deploy:** `cd gateway && pnpm run deploy`
+**Deploy:** `pnpm run deploy` targets preview; `pnpm run deploy:prod` targets production.
 
-**Secrets (managed via Doppler):** `AI_GATEWAY_API_KEY`, `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_FROM`
+**Secrets are managed by Sigillo.** Both `gateway/` and `website/` are linked
+to the single Sigillo `website` project. Package scripts inject `dev` secrets
+with `sigillo run`; no `.env` or `.dev.vars` files should exist. Run
+`pnpm secrets` inside either package to sync its `prod` secrets to Cloudflare.
+
+Gateway secrets: `AI_GATEWAY_API_KEY`, `STRIPE_SECRET_KEY`,
+`STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY`, `RESEND_FROM`, `STRADA_TOKEN`.
+Both packages sync the complete environment to their Cloudflare Worker.
 
 ## Vercel AI Gateway models endpoint
 
