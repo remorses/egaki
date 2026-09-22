@@ -88,9 +88,13 @@
               "docs/cli/voice-clone",
               "docs/cli/models",
               "docs/cli/login",
+              "docs/cli/login-status",
               "docs/cli/subscribe",
               "docs/cli/unsubscribe",
-              "docs/cli/usage"
+              "docs/cli/usage",
+              "docs/cli/completions-install",
+              "docs/cli/completions-uninstall",
+              "docs/cli/completions-script"
             ]
           }
         ]
