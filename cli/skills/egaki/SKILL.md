@@ -66,6 +66,20 @@ Agents should always pass `-m` explicitly to avoid the interactive picker.
 
 1. **`grok-imagine-video-1.5`** (xAI Grok)
 
+## Extracting small assets from a reference
+
+**Crop to the target object first** with an image tool, leaving a small margin,
+then pass that crop to `egaki image --input`. This makes small details easier for
+the model to see and reduces ambiguity about which object to preserve. In a
+switch-extraction comparison, a tight crop preserved the design much better than
+the full instrument image with the same prompt.
+
+Keep the prompt short: "Extract this switch exactly as it is, with a transparent
+background. Do not redesign it or change its shape, materials, or details."
+
+**Inspect the result:** generation can still redraw details. Use a direct crop
+and background masking when exact original pixels are required.
+
 ## Video generation note
 
 Video generation can be very slow (1-3 minutes per request). Always use a
