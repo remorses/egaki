@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.11.0
+
+1. **Background OAuth login for agents and non-TTY shells.** `egaki login --provider chatgpt` and `egaki login --provider xai-oauth` start the browser login and return. An interactive terminal still stays attached until login finishes.
+
+   ```bash
+   egaki login --provider chatgpt
+   # Login is running in the background and the browser will open.
+   # After approval, verify with: egaki login status chatgpt
+   ```
+
+2. **New `egaki login status` command** — check one provider. The command exits with status 1 until that login is complete:
+
+   ```bash
+   egaki login status chatgpt
+   egaki login status xai-oauth
+   ```
+
+3. **Shell completions** — install, print, or remove the completion script:
+
+   ```bash
+   egaki completions install
+   egaki completions script
+   egaki completions uninstall
+   ```
+
+4. **`--aspect-ratio` works on OpenAI image models.** `gpt-image-*` and `dall-e-*` have no native aspect-ratio parameter. The flag now picks the closest supported size and states the ratio in the prompt. A 16:9 request on `gpt-image-1-mini` produces 1536x1024 instead of a silent 1024x1024 square:
+
+   ```bash
+   egaki image "a red cube on a white table" \
+     -m gpt-image-1-mini --aspect-ratio 16:9
+   ```
+
+5. **ChatGPT image generation uses the account model list.** A fixed slug such as `gpt-5.4` is no longer sent. Generation uses the highest-priority model that is visible, API-supported, and included in the saved plan. If that model is rejected, it retries once with the next listed model.
+
+6. **ChatGPT login is saved only after the token exchange succeeds.** The redirect uses `localhost`, which the allow-list accepts. The listener stays on `127.0.0.1`. A failed exchange does not replace the previous login. `egaki login --show` no longer calls a revoked token valid. It says the token is not expired locally, or that the next request will try to refresh.
+
+7. **`egaki subscribe --plan` accepts only `plus` and `pro`.** Plus is $29/mo. Pro is $99/mo. An invalid plan name fails in the CLI instead of opening a buy URL that returns 400:
+
+   ```bash
+   egaki subscribe --plan plus
+   egaki subscribe --plan pro
+   ```
+
+8. **Fixed HMR for a root `.mdx` file that is also imported.** Editing `tagline.mdx` when another file imports it updates the player without a manual reload.
+
+9. **`egaki dev` prints SDK method names and a docs link** after the server URL, including `seekTo`, `screenshot`, `filmstrip`, `export`, and `getInfo`.
+
 ## 0.10.0
 
 1. **New `egaki dev` command — zero-config MDX video dev server.** Serve an `.mdx` file with no project setup at all: no `package.json`, no `vite.config.ts`, no `npm install`. All dependencies (react, remotion, vite) come from the egaki CLI's own installation:
