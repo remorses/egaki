@@ -346,7 +346,7 @@ function listen(server: ReturnType<typeof createServer>, port: number) {
   })
 }
 
-// Use 127.0.0.1 in the redirect. localhost can resolve to ::1 and miss this listener.
+// Listen on 127.0.0.1 only. The redirect host must stay localhost for the allow-list.
 async function startOAuthServer(): Promise<number> {
   if (oauthServer) {
     const address = oauthServer.address()
@@ -427,7 +427,8 @@ export async function chatGptOAuthLogin({
   openInBackground = false,
 } = {}): Promise<ChatGptAuth> {
   const port = await startOAuthServer()
-  const redirectUri = `http://${OAUTH_HOST}:${port}/auth/callback`
+  // The allow-list accepts localhost, not 127.0.0.1. The listener stays on IPv4.
+  const redirectUri = `http://localhost:${port}/auth/callback`
 
   const pkce = await generatePKCE()
   const state = base64UrlEncode(
