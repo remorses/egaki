@@ -33,7 +33,7 @@ export function HeroSection() {
 
   useEffect(() => {
     const timeout = setTimeout(() => setFontsReady(true), 3000)
-    document.fonts.ready.then(() => setFontsReady(true))
+    void document.fonts.ready.then(() => setFontsReady(true))
     return () => clearTimeout(timeout)
   }, [])
 
