@@ -635,7 +635,7 @@ cli
     z
       .array(z.string())
       .describe(
-        'Reference images for R2V generation, repeatable. xAI: 1-7 images. Seedance: 1-9 images (use @Image1 etc. in prompt)',
+        'Reference images for R2V generation, repeatable. xAI: 1-7 images (1-14 on grok-imagine-video-1.5). Seedance: 1-9 images (use @Image1 etc. in prompt)',
       ),
   )
   .option(
@@ -1722,7 +1722,7 @@ const FEATURED_IMAGE_MODELS = [
   'flux-pro-1.1-ultra',
   'recraft-v4',
   'dall-e-3',
-  'grok-imagine-image-quality',
+  'grok-imagine-image-2.0',
 ]
 
 /**

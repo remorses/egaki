@@ -240,6 +240,15 @@ const xaiImage = {
   providerOptions: xaiImageProviderOptions,
 }
 
+// Docs: https://docs.x.ai/developers/model-capabilities/images/generation
+// quality is only honored by grok-imagine-image-2.0. 'auto' is the server default
+// (low for generation, medium for editing), so egaki omits the field for 'auto'.
+const xaiImage2ProviderOptions: ProviderOption[] = [
+  { flag: 'quality', providerKey: 'quality', description: 'Image quality', values: ['auto', 'low', 'medium'], defaultValue: 'auto', type: 'string' },
+  { flag: 'resolution', providerKey: 'resolution', description: 'Output resolution', values: ['1k', '2k'], defaultValue: '1k', type: 'string' },
+  { flag: 'output-format', providerKey: 'output_format', description: 'Output format', values: ['png', 'jpeg'], defaultValue: 'png', type: 'string' },
+]
+
 // Source: node_modules/@ai-sdk/xai/dist/index.d.ts → XaiVideoModelOptions
 // Docs:   https://docs.x.ai/docs/api-reference#create-video
 const xaiVideoProviderOptions: ProviderOption[] = [
@@ -249,6 +258,21 @@ const xaiVideoProviderOptions: ProviderOption[] = [
   // Kept here so findProviderOption() can verify the model supports it and resolve the correct providerKey.
   { flag: 'video-url', providerKey: 'videoUrl', description: 'Source video URL for editing or extension (internal)', type: 'string' },
   { flag: 'reference-images', providerKey: 'referenceImageUrls', description: 'Reference images for R2V (1-7 files or URLs)', type: 'string', array: true },
+]
+
+// Docs: https://docs.x.ai/developers/model-capabilities/video/overview
+// grok-imagine-video-1.5: T2V/I2V at native 1080p, R2V up to 720p with up to 14 references.
+// No editing or extension. Preset voices (reference_audios), last_frame and keyframes exist
+// on the REST API but are not exposed by @ai-sdk/xai yet.
+const xaiVideo15ProviderOptions: ProviderOption[] = [
+  { flag: 'resolution', providerKey: 'resolution', description: 'Output resolution (R2V is capped at 720p)', values: ['480p', '720p', '1080p'], defaultValue: '720p', type: 'string' },
+  { flag: 'mode', providerKey: 'mode', description: 'Video operation mode', values: ['reference-to-video'], type: 'string' },
+  { flag: 'reference-images', providerKey: 'referenceImageUrls', description: 'Reference images for R2V (1-14 files or URLs)', type: 'string', array: true },
+]
+
+// grok-imagine-video-1.5-lite: T2V/I2V only. 1080p is upscaled from 720p.
+const xaiVideo15LiteProviderOptions: ProviderOption[] = [
+  { flag: 'resolution', providerKey: 'resolution', description: 'Output resolution (1080p is upscaled from 720p)', values: ['480p', '720p', '1080p'], defaultValue: '720p', type: 'string' },
 ]
 
 // Source: node_modules/@ai-sdk/bytedance/dist/index.d.ts → ByteDanceVideoProviderOptions
@@ -747,6 +771,24 @@ export const CATALOG: ModelEntry[] = [
       multipleImages: true,
     },
   },
+  {
+    id: 'grok-imagine-image-2.0',
+    name: 'Grok Imagine Image 2.0',
+    released: '2026-08',
+    ...xaiImage,
+    providerOptions: xaiImage2ProviderOptions,
+    // $0.04 at low quality (what 'auto' serves for generation); medium is $0.06, 2k costs more.
+    cost: { type: 'per-image', perImage: 0.04 },
+    features: {
+      editing: true,
+      inpainting: false,
+      aspectRatios: ['1:1', '3:4', '4:3', '9:16', '16:9', '2:3', '3:2', '21:9', '5:2'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
+  // xAI retires grok-imagine-image-quality on 2026-11-02. After that date, requests to
+  // this slug are served by grok-imagine-image-2.0 with quality 'low'.
   {
     id: 'grok-imagine-image-quality',
     name: 'Grok Imagine Image Quality',
@@ -1608,25 +1650,55 @@ export const VIDEO_CATALOG: VideoModelEntry[] = [
     provider: 'xai',
     strategy: 'video',
     released: '2026-05',
+    // Source: https://ai-gateway.vercel.sh/v1/models (spacexai/grok-imagine-video-1.5)
     cost: {
       type: 'per-video-second',
       defaultDurationSec: 5,
       tiers: [
         { resolution: '480p', costPerSecond: 0.08 },
         { resolution: '720p', costPerSecond: 0.14 },
+        { resolution: '1080p', costPerSecond: 0.25 },
       ],
     },
     features: {
-      textToVideo: false,
+      textToVideo: true,
       imageToVideo: true,
-      capabilities: ['i2v'],
-      aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'],
-      resolutions: ['480p', '720p'],
+      capabilities: ['t2v', 'i2v', 'r2v'],
+      aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9', '5:2'],
+      resolutions: ['480p', '720p', '1080p'],
       durationRangeSec: { min: 1, max: 15 },
       seed: false,
       multipleVideos: false,
     },
-    providerOptions: xaiVideoProviderOptions,
+    providerOptions: xaiVideo15ProviderOptions,
+  },
+  {
+    id: 'grok-imagine-video-1.5-lite',
+    name: 'Grok Imagine Video 1.5 Lite',
+    provider: 'xai',
+    strategy: 'video',
+    released: '2026-10-08',
+    // Source: https://ai-gateway.vercel.sh/v1/models (spacexai/grok-imagine-video-1.5-lite)
+    cost: {
+      type: 'per-video-second',
+      defaultDurationSec: 5,
+      tiers: [
+        { resolution: '480p', costPerSecond: 0.02 },
+        { resolution: '720p', costPerSecond: 0.03 },
+        { resolution: '1080p', costPerSecond: 0.14 },
+      ],
+    },
+    features: {
+      textToVideo: true,
+      imageToVideo: true,
+      capabilities: ['t2v', 'i2v'],
+      aspectRatios: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '21:9', '5:2'],
+      resolutions: ['480p', '720p', '1080p'],
+      durationRangeSec: { min: 1, max: 15 },
+      seed: false,
+      multipleVideos: false,
+    },
+    providerOptions: xaiVideo15LiteProviderOptions,
   },
   // ── Kling (AI Gateway) ──────────────────────────────────────────────
   // Source: https://ai-gateway.vercel.sh/v1/models (klingai/* entries)
