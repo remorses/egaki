@@ -1714,6 +1714,8 @@ const FEATURED_IMAGE_MODELS = [
   'gemini-2.5-flash-image',
   'gemini-3.1-flash-image-preview',
   'nano-banana-pro-preview',
+  'gpt-image-2.5-sunburst',
+  'gpt-image-2.5-flare',
   'gpt-image-2',
   'gpt-image-1.5',
   'chatgpt-image-latest',

@@ -198,6 +198,18 @@ const openaiImage = {
   providerOptions: openaiImageProviderOptions,
 }
 
+// GPT Image 2.5 models add `xhigh` and `max` quality levels.
+// Docs: https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
+const openaiImage25ProviderOptions: ProviderOption[] = [
+  { flag: 'quality', providerKey: 'quality', description: 'Image quality', values: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'], defaultValue: 'auto', type: 'string' },
+  { flag: 'output-format', providerKey: 'outputFormat', description: 'Output format', values: ['png', 'jpeg', 'webp'], defaultValue: 'png', type: 'string' },
+]
+
+const openaiImage25 = {
+  ...openaiImage,
+  providerOptions: openaiImage25ProviderOptions,
+}
+
 const replicateImage = {
   provider: 'replicate',
   strategy: 'image' as const,
@@ -889,6 +901,45 @@ export const CATALOG: ModelEntry[] = [
     released: '2026-04-21',
     ...openaiImage,
     // Token-based pricing: $30/1M output image tokens. Medium quality 1024×1024 ≈ $0.053.
+    cost: { type: 'per-image', perImage: 0.053 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: [],
+      sizes: ['1024x1024', '1536x1024', '1024x1536'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
+  {
+    id: 'gpt-image-2.5-flare',
+    name: 'GPT Image 2.5 Flare',
+    description:
+      'Fastest GPT Image 2.5 model for high-quality everyday generation and editing. ' +
+      'Token rates match gpt-image-2; $0.053 is the medium-quality 1024×1024 estimate.',
+    released: '2026-09-08',
+    ...openaiImage25,
+    // Token-based pricing: $30/1M output image tokens, same rates as gpt-image-2.
+    cost: { type: 'per-image', perImage: 0.053 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: [],
+      sizes: ['1024x1024', '1536x1024', '1024x1536'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
+  {
+    id: 'gpt-image-2.5-sunburst',
+    name: 'GPT Image 2.5 Sunburst',
+    description:
+      'Most capable GPT Image 2.5 model, for work where editing precision and reference ' +
+      'fidelity matter most. Slower than Flare. Token rates match gpt-image-2; actual cost ' +
+      'is usually higher because it spends more tokens per image.',
+    released: '2026-09-08',
+    ...openaiImage25,
+    // Token-based pricing: $30/1M output image tokens, same rates as gpt-image-2.
     cost: { type: 'per-image', perImage: 0.053 },
     features: {
       editing: true,

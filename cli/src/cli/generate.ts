@@ -65,7 +65,7 @@ export type ImageModelId =
   | 'recraft-v2' | 'recraft-v3' | 'recraft-v4' | 'recraft-v4-pro' | 'recraft-v4.1' | 'recraft-v4.1-pro' | 'recraft-v4.1-utility' | 'recraft-v4.1-utility-pro'
   | 'seedream-5.0-lite' | 'seedream-4.5' | 'seedream-4.0'
   | 'grok-imagine-image' | 'grok-imagine-image-2.0' | 'grok-imagine-image-quality'
-  | 'dall-e-2' | 'dall-e-3' | 'gpt-image-1' | 'gpt-image-1-mini' | 'gpt-image-1.5' | 'gpt-image-2' | 'chatgpt-image-latest'
+  | 'dall-e-2' | 'dall-e-3' | 'gpt-image-1' | 'gpt-image-1-mini' | 'gpt-image-1.5' | 'gpt-image-2' | 'gpt-image-2.5-flare' | 'gpt-image-2.5-sunburst' | 'chatgpt-image-latest'
   | (string & {})
 
 /** Video model IDs from the catalog. Accepts arbitrary strings too. */
@@ -159,7 +159,7 @@ export interface GenerateVideoResult {
 // ─── OpenAI provider options type (not exported by @ai-sdk/openai) ───────────
 
 type OpenAIImageProviderOptions = {
-  quality?: 'standard' | 'low' | 'medium' | 'high' | 'auto'
+  quality?: 'standard' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'auto'
   outputFormat?: 'png' | 'jpeg' | 'webp'
   outputCompression?: number
   size?: `${number}x${number}`
