@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.12.0
+
+1. **New GPT Image 2.5 models** — `gpt-image-2.5-flare` (fast, everyday generation and editing) and `gpt-image-2.5-sunburst` (most capable, best editing precision and reference fidelity). Both add the new `xhigh` and `max` quality levels:
+
+   ```bash
+   egaki image "a ceramic vase on linen, studio light" \
+     -m gpt-image-2.5-sunburst --quality max -o vase.png
+   ```
+
+2. **New `grok-imagine-image-2.0` model** — $0.04 per image at low quality. `--quality` accepts `auto`, `low` and `medium`; default is `auto`. It replaces `grok-imagine-image-quality` in the model picker. xAI retires `grok-imagine-image-quality` on 2026-11-02:
+
+   ```bash
+   egaki image "a fox wearing armor in a misty forest" \
+     -m grok-imagine-image-2.0 --quality medium --resolution 2k -o fox.png
+   ```
+
+3. **New `grok-imagine-video-1.5-lite` model** — cheap text-to-video and image-to-video at 480p, 720p or 1080p (1080p is upscaled from 720p). From $0.02 per second:
+
+   ```bash
+   egaki video "a paper boat drifting on a rainy street" \
+     -m grok-imagine-video-1.5-lite --resolution 720p -o boat.mp4
+   ```
+
+4. **`grok-imagine-video-1.5` supports text-to-video, 1080p and up to 14 reference images.** It also adds the `21:9` and `5:2` aspect ratios. Reference-to-video is capped at 720p:
+
+   ```bash
+   egaki video "the model walks down a white runway" \
+     -m grok-imagine-video-1.5 \
+     --mode reference-to-video \
+     --reference-images ./model-face.jpg \
+     --reference-images ./outfit.jpg \
+     -o runway.mp4
+   ```
+
+Thanks @itstamhn for #10 and #11!
+
 ## 0.11.0
 
 1. **Background OAuth login for agents and non-TTY shells.** `egaki login --provider chatgpt` and `egaki login --provider xai-oauth` start the browser login and return. An interactive terminal still stays attached until login finishes.
