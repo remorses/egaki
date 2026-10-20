@@ -11,6 +11,21 @@ The README covers all MDX video syntax, animation primitives, easing presets,
 LayoutTransition, captions, voice cloning, media components, and CSS rules.
 This AGENTS.md only contains internal development rules and architecture details.
 
+## Changesets
+
+Load the `changesets` skill before a bug fix or a new feature. Add a
+`.changeset/*.md` file for every user-facing change. The skill has the file
+format, package rules, issue references, and filename rules. See
+`.changeset/readme.md`.
+
+The publishable package is `egaki`. Also list `@egaki/midjourney` when that
+package changes. Do not add changesets for example apps. `egaki-website` and
+`egaki-gateway` have no `version` field, so skip them.
+
+If the change fixes a GitHub issue, put `Fixes #123` on its own line in the
+changeset. Publish reads that line and closes the issue. Do not edit
+`CHANGELOG.md` by hand.
+
 ## Deploying the website
 
 The website deploys via Cloudflare Workers (wrangler), not Holocron deploy.

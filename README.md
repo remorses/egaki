@@ -1707,7 +1707,7 @@ This package ships a skill file that teaches AI coding agents how and when to
 use it. Install it with:
 
 ```bash
-npx -y skills add remorses/egaki
+npx -y skills add remorses/egaki -g -y
 ```
 
 ## License
