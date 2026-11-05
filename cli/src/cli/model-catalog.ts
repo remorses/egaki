@@ -950,6 +950,45 @@ export const CATALOG: ModelEntry[] = [
       multipleImages: true,
     },
   },
+  // GPT Image 2.6 (changelog: https://developers.openai.com/api/docs/changelog, 2026-11-04).
+  // Quality levels and pricing are assumed equal to 2.5 until OpenAI's model pages confirm them.
+  {
+    id: 'gpt-image-2.6-flare',
+    name: 'GPT Image 2.6 Flare',
+    description:
+      'Fastest GPT Image 2.6 model for image generation and editing, with adjustable complexity. ' +
+      'Pricing assumed equal to gpt-image-2.5-flare.',
+    released: '2026-11-04',
+    ...openaiImage25,
+    cost: { type: 'per-image', perImage: 0.053 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: [],
+      sizes: ['1024x1024', '1536x1024', '1024x1536'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
+  {
+    id: 'gpt-image-2.6-sunburst',
+    name: 'GPT Image 2.6 Sunburst',
+    description:
+      'Most capable GPT Image 2.6 model, for work where editing precision and reference ' +
+      'fidelity matter most. Slower than Flare. Pricing assumed equal to gpt-image-2.5-sunburst; ' +
+      'actual cost is usually higher because it spends more tokens per image.',
+    released: '2026-11-04',
+    ...openaiImage25,
+    cost: { type: 'per-image', perImage: 0.053 },
+    features: {
+      editing: true,
+      inpainting: true,
+      aspectRatios: [],
+      sizes: ['1024x1024', '1536x1024', '1024x1536'],
+      seed: false,
+      multipleImages: true,
+    },
+  },
   {
     id: 'chatgpt-image-latest',
     name: 'ChatGPT Image',
