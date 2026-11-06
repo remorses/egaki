@@ -32,7 +32,8 @@
   },
   "files": [
     "src",
-    "dist"
+    "dist",
+    "skills"
   ],
   "keywords": [
     "screenshot",

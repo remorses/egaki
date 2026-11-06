@@ -154,7 +154,8 @@ precision highp float;
 
 uniform sampler2D u_tex;
 uniform mat3 u_rot;          // plane local -> world rotation
-uniform vec2 u_planeSize;    // logical frame px
+uniform vec2 u_frameSize;    // logical output frame px
+uniform vec2 u_planeSize;    // logical plane px, centered in the frame
 uniform float u_perspective; // camera z in px
 uniform float u_translateX;  // plane center x in px
 uniform float u_translateZ;  // plane center z in px
@@ -204,7 +205,7 @@ const vec2 HEX_MID[6] = vec2[](
 // Intersect the camera ray through screen uv suv with the tilted plane.
 // Returns ray distance t, or -1.0 on miss. Outputs plane uv + edge coverage.
 float intersectPlane(vec2 suv, out vec2 uv, out float coverage) {
-  vec2 screen = (suv - 0.5) * u_planeSize;
+  vec2 screen = (suv - 0.5) * u_frameSize;
   vec3 C = vec3(0.0, 0.0, u_perspective);
   vec3 dir = normalize(vec3(screen, 0.0) - C);
   vec3 n = u_rot * vec3(0.0, 0.0, 1.0);
@@ -318,6 +319,7 @@ void main() {
 const UNIFORM_NAMES = [
   'u_tex',
   'u_rot',
+  'u_frameSize',
   'u_planeSize',
   'u_perspective',
   'u_translateX',
@@ -377,10 +379,14 @@ type HtmlInCanvasGl = WebGL2RenderingContext & {
 }
 
 export interface AngledScreenDrawOptions {
-  /** Logical frame width in px. The plane texture covers the full frame. */
+  /** Logical frame width in px. */
   width: number
   /** Logical frame height in px. */
   height: number
+  /** Logical width of the textured plane in px, centered in the frame. Default `width`. */
+  planeWidth?: number
+  /** Logical height of the textured plane in px. Default `height`. */
+  planeHeight?: number
   /** Seconds, seeds the film grain. Default 0. */
   time?: number
   params?: Partial<AngledScreenParams>
@@ -398,9 +404,9 @@ export interface AngledScreenRenderer {
 
 /**
  * Create the WebGL2 angled screen renderer on a canvas. The texture you
- * upload is the whole frame (width x height), laid out as the flat screen
- * before tilting: put the content where it should sit on the plane and
- * leave the rest transparent.
+ * upload is the flat plane before tilting (frame size unless you pass
+ * planeWidth/planeHeight): put the content where it should sit on the plane
+ * and leave the rest transparent.
  */
 export function createAngledScreenRenderer({
   canvas,
@@ -492,7 +498,7 @@ export function createAngledScreenRenderer({
       }
     },
 
-    draw({ width, height, time = 0, params }) {
+    draw({ width, height, planeWidth = width, planeHeight = height, time = 0, params }) {
       const p = { ...ANGLED_SCREEN_DEFAULTS, ...params }
       const { perspective, translateX, translateZ, focus, aperture, maxBlur } = p
 
@@ -551,7 +557,8 @@ export function createAngledScreenRenderer({
         M[0]![1]!, M[1]![1]!, M[2]![1]!,
         M[0]![2]!, M[1]![2]!, M[2]![2]!,
       ])
-      gl.uniform2f(locs.u_planeSize!, width, height)
+      gl.uniform2f(locs.u_frameSize!, width, height)
+      gl.uniform2f(locs.u_planeSize!, planeWidth, planeHeight)
       gl.uniform1f(locs.u_perspective!, perspective)
       gl.uniform1f(locs.u_translateX!, translateX)
       gl.uniform1f(locs.u_translateZ!, translateZ)
@@ -586,15 +593,19 @@ export function createAngledScreenRenderer({
 // ---------------------------------------------------------------------------
 
 export interface RenderImageOptions {
-  image: ImageBitmap | HTMLImageElement
+  /** One or more screens, laid out left to right on the same tilted plane. */
+  images: Array<ImageBitmap | HTMLImageElement>
   /** Output frame width in css px. Default 1920. */
   width?: number
   /** Output frame height in css px. Default 1080. */
   height?: number
   /** Device pixel ratio of the output. Default 2. */
   scale?: number
-  /** Screen width as a fraction of the frame width. Height follows the image aspect. Default 0.8. */
+  /** Width of the screens row as a fraction of the frame width. Heights follow the image aspects.
+   *  Above 1 the plane grows past the frame, useful with several screens and a far camera. Default 0.8. */
   contentWidth?: number
+  /** Space between screens in css px. Default 48. */
+  gap?: number
   /** Screen corner radius in css px. Default 12. */
   radius?: number
   /** Seconds, seeds the film grain. Default 0. */
@@ -606,41 +617,56 @@ export interface RenderImageOptions {
   quality?: number
 }
 
-/** Render an image as an angled screen and encode the frame. Browser only. */
+/** Render images as screens on one angled plane and encode the frame. Browser only. */
 export async function renderImage({
-  image,
+  images,
   width = 1920,
   height = 1080,
   scale = 2,
   contentWidth = 0.8,
+  gap = 48,
   radius = 12,
   time = 0,
   params,
   type = 'image/png',
   quality,
 }: RenderImageOptions): Promise<Blob> {
+  if (images.length === 0) throw new Error('[angled-screen] renderImage needs at least one image')
   const pixelWidth = Math.round(width * scale)
   const pixelHeight = Math.round(height * scale)
 
-  // Flat screen texture: the image centered on a transparent frame, like the
-  // DOM layout egaki captures with HTML-in-canvas.
-  const plane = new OffscreenCanvas(pixelWidth, pixelHeight)
+  // Flat screen texture: the images in a centered row on a transparent plane,
+  // like the DOM layout egaki captures with HTML-in-canvas. All screens share
+  // one height, so the row fills contentWidth exactly. The plane is at least
+  // the frame and grows to fit a row wider or taller than it.
+  const rowWidth = width * contentWidth
+  const aspectSum = images.reduce((sum, image) => sum + image.width / image.height, 0)
+  const h = (rowWidth - gap * (images.length - 1)) / aspectSum
+  const planeWidth = Math.max(width, rowWidth)
+  const planeHeight = Math.max(height, h)
+  const plane = new OffscreenCanvas(Math.round(planeWidth * scale), Math.round(planeHeight * scale))
   const ctx = plane.getContext('2d')
   if (!ctx) throw new Error('[angled-screen] 2D canvas unavailable')
-  const w = width * contentWidth
-  const h = (w * image.height) / image.width
   ctx.scale(scale, scale)
   ctx.imageSmoothingQuality = 'high'
-  ctx.beginPath()
-  ctx.roundRect((width - w) / 2, (height - h) / 2, w, h, radius)
-  ctx.clip()
-  ctx.drawImage(image, (width - w) / 2, (height - h) / 2, w, h)
+  let x = (planeWidth - rowWidth) / 2
+  const y = (planeHeight - h) / 2
+  for (const image of images) {
+    const w = (h * image.width) / image.height
+    ctx.save()
+    ctx.beginPath()
+    ctx.roundRect(x, y, w, h, radius)
+    ctx.clip()
+    ctx.drawImage(image, x, y, w, h)
+    ctx.restore()
+    x += w + gap
+  }
 
   const canvas = new OffscreenCanvas(pixelWidth, pixelHeight)
   const renderer = createAngledScreenRenderer({ canvas })
   try {
     renderer.uploadImage(plane)
-    renderer.draw({ width, height, time, params })
+    renderer.draw({ width, height, planeWidth, planeHeight, time, params })
     return await canvas.convertToBlob({ type, quality })
   } finally {
     renderer.dispose()

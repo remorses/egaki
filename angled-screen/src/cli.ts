@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Render an image as an angled 3D screen through the user's Chrome (playwriter extension).
+// Render images as angled 3D screens through the user's Chrome (playwriter extension).
 // Serves the browser renderer on a random localhost port, opens a tab, the page renders with
 // WebGL2 and POSTs the encoded image back, then the tab closes.
 
@@ -29,15 +29,19 @@ const PAGE_HTML = dedent`
   <script type="module">
     import { renderImage } from '/index.js'
     window.renderAngledScreen = async (options) => {
-      const image = await createImageBitmap(await (await fetch('/input')).blob())
-      const blob = await renderImage({ ...options, image })
+      const images = await Promise.all(
+        Array.from({ length: options.imageCount }, async (_, i) =>
+          createImageBitmap(await (await fetch('/input/' + i)).blob()),
+        ),
+      )
+      const blob = await renderImage({ ...options, images })
       const res = await fetch('/output', { method: 'POST', body: blob })
       if (!res.ok) throw new Error('Upload failed: ' + res.status)
     }
   </script>
 `
 
-type RenderPageOptions = Omit<RenderImageOptions, 'image'>
+type RenderPageOptions = Omit<RenderImageOptions, 'images'> & { imageCount: number }
 
 declare global {
   interface Window {
@@ -45,8 +49,8 @@ declare global {
   }
 }
 
-// Routes: / page, /index.js renderer, /input image, POST /output result.
-function startServer({ inputPath, onOutput }: { inputPath: string; onOutput: (bytes: Buffer) => void }) {
+// Routes: / page, /index.js renderer, /input/<i> images, POST /output result.
+function startServer({ inputPaths, onOutput }: { inputPaths: string[]; onOutput: (bytes: Buffer) => void }) {
   const server = http.createServer((req, res) => {
     const pathname = new URL(req.url ?? '/', 'http://localhost').pathname
     if (req.method === 'POST' && pathname === '/output') {
@@ -69,7 +73,8 @@ function startServer({ inputPath, onOutput }: { inputPath: string; onOutput: (by
       res.end(fs.readFileSync(path.join(MODULE_DIR, 'index.js')))
       return
     }
-    if (pathname === '/input') {
+    const inputPath = pathname.startsWith('/input/') ? inputPaths[Number(pathname.slice('/input/'.length))] : undefined
+    if (inputPath) {
       res.end(fs.readFileSync(inputPath))
       return
     }
@@ -92,25 +97,27 @@ const d = ANGLED_SCREEN_DEFAULTS
 
 cli
   .command(
-    '<image>',
+    '<...images>',
     dedent`
-      Render an image as a tilted 3D screen with depth of field, fog,
-      chromatic aberration and film grain.
+      Render images as tilted 3D screens with depth of field, fog,
+      chromatic aberration and film grain. Several images become a row of
+      screens on the same plane, so the camera can sit further back.
 
       Opens a tab in the playwriter-connected Chrome, renders the frame with
       WebGL2, writes the image, then closes the tab. The image type comes
       from the \`--out\` extension: png, jpg or webp.
 
-      The screen is \`--content-width\` of the frame wide and keeps the image
-      aspect ratio. Tune the angle with \`--rotate-x\`, \`--rotate-y\` and
+      The screens row is \`--content-width\` of the frame wide and keeps the
+      image aspect ratios. Tune the angle with \`--rotate-x\`, \`--rotate-y\` and
       \`--perspective\`; use \`--debug\` to see the depth ramp that drives the blur.
     `,
   )
-  .option('-o, --out [path]', z.string().optional().describe('Output image path (default: <image name>-angled.png next to the image)'))
+  .option('-o, --out [path]', z.string().optional().describe('Output image path (default: <first image name>-angled.png next to it)'))
   .option('--width [px]', z.number().default(1920).describe('Frame width in css px'))
   .option('--height [px]', z.number().default(1080).describe('Frame height in css px'))
   .option('--scale [ratio]', z.number().default(2).describe('Device pixel ratio of the output image'))
-  .option('--content-width [fraction]', z.number().default(0.8).describe('Screen width as a fraction of the frame width'))
+  .option('--content-width [fraction]', z.number().default(0.8).describe('Screens row width as a fraction of the frame width. Above 1 the plane grows past the frame'))
+  .option('--gap [px]', z.number().default(48).describe('Space between screens in css px'))
   .option('--radius [px]', z.number().default(12).describe('Screen corner radius in css px'))
   .option('--perspective [px]', z.number().default(d.perspective).describe('Camera distance in px. Smaller is more dramatic'))
   .option('--rotate-x [deg]', z.number().default(d.rotateX).describe('Tilt top/bottom in degrees. Positive brings the top closer'))
@@ -132,16 +139,19 @@ cli
   .example('angled-screen screenshot.png')
   .example('# Steeper angle, white background, jpg')
   .example('angled-screen screenshot.png -o hero.jpg --rotate-y=-24 --rotate-x 11 --perspective 720 --background "#ffffff"')
-  .action(async (imageArg, options, { console }) => {
-    const inputPath = path.resolve(imageArg)
-    if (!fs.existsSync(inputPath)) {
-      throw new Error(`File not found: ${inputPath}`)
+  .example('# Two pages side by side on one plane')
+  .example('angled-screen home.png pricing.png -o hero.png --content-width 1 --rotate-y=-18')
+  .action(async (imageArgs, options, { console }) => {
+    const inputPaths = imageArgs.map((arg) => path.resolve(arg))
+    const missing = inputPaths.find((p) => !fs.existsSync(p))
+    if (missing) {
+      throw new Error(`File not found: ${missing}`)
     }
-    const outPath = path.resolve(options.out || inputPath.replace(/\.[^./]+$/, '') + '-angled.png')
+    const outPath = path.resolve(options.out || inputPaths[0]!.replace(/\.[^./]+$/, '') + '-angled.png')
     const ext = path.extname(outPath).toLowerCase()
     const type = OUTPUT_TYPES[ext]
     if (!type) {
-      throw new Error(`Unsupported output type "${ext}". Use .png, .jpg or .webp: angled-screen ${imageArg} -o out.png`)
+      throw new Error(`Unsupported output type "${ext}". Use .png, .jpg or .webp: angled-screen ${imageArgs.join(' ')} -o out.png`)
     }
 
     const renderOptions: RenderPageOptions = {
@@ -149,6 +159,8 @@ cli
       height: options.height,
       scale: options.scale,
       contentWidth: options.contentWidth,
+      gap: options.gap,
+      imageCount: inputPaths.length,
       radius: options.radius,
       type,
       quality: options.quality,
@@ -173,7 +185,7 @@ cli
 
     let output: Buffer | undefined
     const { server, origin } = await startServer({
-      inputPath,
+      inputPaths,
       onOutput: (bytes) => {
         output = bytes
       },
