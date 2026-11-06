@@ -66,6 +66,9 @@ angled-screen download.png home.png -o hero.jpg ... --rotate-y=-16 --translate-x
 
 - Images go left to right. With positive `--rotate-y` the **first** image is near; with negative
   `--rotate-y` the last one is near. The near one is the hero.
+- **Vary the hero.** When showing options, render each page as the hero once: `home.png
+  download.png` and `download.png home.png`, each on both sides. Any page with a big headline
+  works as a hero, not only the home page.
 - `--translate-x` centers the hero (positive for positive `--rotate-y`). About 400 for two
   trimmed 1600x1000 screenshots at `--content-width 1.5`. Lower it if hero text is cut at the
   frame edge, raise it if the filler takes more than a third of the frame.
