@@ -936,11 +936,12 @@ npx @egaki/angled-screen screenshot.png -o hero.png
 npx @egaki/angled-screen screenshot.png -o hero.jpg --rotate-y=-24 --rotate-x 11 --perspective 720 --background '#ffffff'
 ```
 
-Pass several images to put them side by side on the same tilted plane. This
-fills the frame for thin sites, with the camera further back:
+Pass several images to put them side by side on the same tilted plane. Zoom
+on the near one; the next page shows as a soft filler at the far edge, which
+helps thin sites fill the frame:
 
 ```bash
-npx @egaki/angled-screen home.png download.png -o hero.jpg --content-width 1.7 --rotate-y 16 --translate-z=-750
+npx @egaki/angled-screen home.png download.png -o hero.jpg --content-width 1.7 --rotate-y 16 --translate-z 150 --translate-x 580
 ```
 
 Options use the same names and defaults as the props above, in kebab case

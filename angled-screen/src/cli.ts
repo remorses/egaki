@@ -140,7 +140,7 @@ cli
   .example('# Steeper angle, white background, jpg')
   .example('angled-screen screenshot.png -o hero.jpg --rotate-y=-24 --rotate-x 11 --perspective 720 --background "#ffffff"')
   .example('# Two pages side by side on one plane')
-  .example('angled-screen home.png pricing.png -o hero.png --content-width 1 --rotate-y=-18')
+  .example('angled-screen home.png download.png -o hero.png --content-width 1.7 --rotate-y 16 --translate-z 150 --translate-x 580')
   .action(async (imageArgs, options, { console }) => {
     const inputPaths = imageArgs.map((arg) => path.resolve(arg))
     const missing = inputPaths.find((p) => !fs.existsSync(p))

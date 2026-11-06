@@ -5,7 +5,8 @@ description: |
   depth of field, chromatic aberration, fog and film grain. The `@egaki/angled-screen` CLI renders
   one or more images on the same angled plane through the user's Chrome (playwriter) and writes
   png, jpg or webp. Ships Tommy's taste for these images: frame filled, moderate side angle,
-  blur on the left or right, OpenSession effect strength, two-screen layouts for thin sites.
+  blur on the left or right, OpenSession effect strength, a hero screen with a second page as
+  filler for thin sites.
   ALWAYS load this skill when the user asks for an angled screen, tilted screenshot, 3D
   screenshot, perspective mockup, hero image or social image from a screenshot, or runs
   `angled-screen`. Also load it before tuning egaki `<AngledScreen>` props.
@@ -62,24 +63,29 @@ Set `--background` to the page background color so the frame edges blend in.
 
 ### Two screens (thin or sparse sites)
 
-When a site has a narrow content column or lots of empty space, put two pages side by side on
-one plane. The camera sits further back and the frame still looks full. The near screen is
-sharp, the far one melts into bokeh:
+When a site has a narrow content column or lots of empty space, add a second page next to the
+hero. **Focus on the hero screen only.** Zoom in so it fills most of the frame; the second
+screen is only filler that shows as a soft, blurred edge on the far side. Never try to fit both
+screens in the frame:
 
 ```bash
+# hero on the left, filler on the right
 angled-screen home.png download.png -o hero.jpg --scale 1 --quality 0.9 --background '#000000' \
-  --content-width 1.7 --gap 80 --rotate-x 5 --rotate-y 16 --translate-z=-750 --translate-x 160 \
-  --aperture 0.35 --max-blur 0.035 --chromatic-aberration 0.5 --fog 0.3 --grain 0.03
+  --content-width 1.7 --gap 80 --rotate-x 6 --rotate-y 16 --translate-z 150 --translate-x 580 \
+  --aperture 0.35 --max-blur 0.06 --chromatic-aberration 0.5 --fog 0.3 --grain 0.03
+
+# hero on the right, filler on the left: swap the order and flip the signs
+angled-screen download.png home.png -o hero.jpg ... --rotate-y=-16 --translate-x=-580
 ```
 
 - Images go left to right. With positive `--rotate-y` the **first** image is near; with negative
-  `--rotate-y` the last one is near. Put the hero page on the near side.
-- Push `--translate-x` toward the near screen (positive for positive `--rotate-y`) so it is not
-  cut by the frame edge.
-- Lower `--max-blur` to about 0.035. The far screen is much deeper, so 0.1 turns it into an
-  unreadable blob.
-- Use `--background '#000000'` on dark sites, so the screen edges stay visible against the
-  slightly lighter page background.
+  `--rotate-y` the last one is near. The near one is the hero.
+- `--translate-x` centers the hero (positive for positive `--rotate-y`). About 580 with two
+  1600x1000 screenshots at `--content-width 1.7`. Lower it if hero text is cut at the frame
+  edge, raise it if the filler takes more than a quarter of the frame.
+- Use `--max-blur 0.06`: the filler is deep, so 0.1 smears it into ghosted copies.
+- Use `--background '#000000'` on dark sites, so screen edges stay visible against the slightly
+  lighter page background.
 
 ## Avoid
 
