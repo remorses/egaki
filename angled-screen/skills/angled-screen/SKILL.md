@@ -5,8 +5,8 @@ description: |
   depth of field, chromatic aberration, fog and film grain. The `@egaki/angled-screen` CLI renders
   one or more images on the same angled plane through the user's Chrome (playwriter) and writes
   png, jpg or webp. Ships Tommy's taste for these images: frame filled, moderate side angle,
-  blur on the left or right, OpenSession effect strength, a hero screen with a second page as
-  filler for thin sites.
+  blur on the left or right, OpenSession effect strength, trimmed screenshots, and a hero
+  screen with a second page as filler.
   ALWAYS load this skill when the user asks for an angled screen, tilted screenshot, 3D
   screenshot, perspective mockup, hero image or social image from a screenshot, or runs
   `angled-screen`. Also load it before tuning egaki `<AngledScreen>` props.
@@ -32,64 +32,58 @@ playwriter session new --tab-group screenshot
 playwriter -s <id> -e 'const page = await context.newPage(); await page.setViewportSize({ width: 1600, height: 1000 }); await page.goto("https://ghosthand.dev", { waitUntil: "networkidle" }); await page.screenshot({ path: "/tmp/home.png" }); await page.close()'
 ```
 
+## Trim first
+
+Screenshots must have **no empty padding**. The CLI crops empty margins (rows and columns in the
+top-left corner color) off every image by default and keeps 40 image px around the content.
+Raise `--trim-padding` for more breathing room. Only pass `--no-trim` when the margins are part
+of the design.
+
 ## Preferred settings
 
 Effect strength is the **OpenSession preset**. Use it on every render unless the user asks for
 something else:
 
 ```bash
---aperture 0.35 --max-blur 0.1 --chromatic-aberration 0.5 --fog 0.3 --grain 0.03
+--aperture 0.35 --chromatic-aberration 0.5 --fog 0.3 --grain 0.03
 ```
 
-### One screen
+### Hero screen with a filler page (default)
 
-The screen must **fill the whole frame**: no empty border around it. Use `--content-width 1`
-and move the camera close with `--translate-z`. Angle mostly on Y so the blur falls on the
-**left or right** side:
-
-```bash
-angled-screen home.png -o hero.jpg --scale 1 --quality 0.9 --background '#0a0a0c' \
-  --content-width 1 --rotate-x 6 --rotate-y=-16 --translate-z 320 \
-  --aperture 0.35 --max-blur 0.1 --chromatic-aberration 0.5 --fog 0.3 --grain 0.03
-```
-
-| look            | angle flags                                  | `--translate-z` |
-| --------------- | -------------------------------------------- | --------------- |
-| right side near | `--rotate-x 6 --rotate-y=-16`                | 320             |
-| left side near  | `--rotate-x 6 --rotate-y 16`                 | 320             |
-| slight roll     | `--rotate-x 8 --rotate-y=-16 --rotate-z=-3`  | 360             |
-
-Set `--background` to the page background color so the frame edges blend in.
-
-### Two screens (thin or sparse sites)
-
-When a site has a narrow content column or lots of empty space, add a second page next to the
-hero. **Focus on the hero screen only.** Zoom in so it fills most of the frame; the second
-screen is only filler that shows as a soft, blurred edge on the far side. Never try to fit both
-screens in the frame:
+**Focus on one hero screen.** Pass the hero page plus a second page of the same site. Zoom in so
+the hero fills most of the frame; the second page is only filler that shows as a soft, blurred
+edge on the far side. Never try to fit both screens in the frame:
 
 ```bash
 # hero on the left, filler on the right
 angled-screen home.png download.png -o hero.jpg --scale 1 --quality 0.9 --background '#000000' \
-  --content-width 1.7 --gap 80 --rotate-x 6 --rotate-y 16 --translate-z 150 --translate-x 580 \
+  --content-width 1.5 --gap 80 --rotate-x 6 --rotate-y 16 --translate-z 0 --translate-x 400 \
   --aperture 0.35 --max-blur 0.06 --chromatic-aberration 0.5 --fog 0.3 --grain 0.03
 
 # hero on the right, filler on the left: swap the order and flip the signs
-angled-screen download.png home.png -o hero.jpg ... --rotate-y=-16 --translate-x=-580
+angled-screen download.png home.png -o hero.jpg ... --rotate-y=-16 --translate-x=-400
 ```
 
 - Images go left to right. With positive `--rotate-y` the **first** image is near; with negative
   `--rotate-y` the last one is near. The near one is the hero.
-- `--translate-x` centers the hero (positive for positive `--rotate-y`). About 580 with two
-  1600x1000 screenshots at `--content-width 1.7`. Lower it if hero text is cut at the frame
-  edge, raise it if the filler takes more than a quarter of the frame.
+- `--translate-x` centers the hero (positive for positive `--rotate-y`). About 400 for two
+  trimmed 1600x1000 screenshots at `--content-width 1.5`. Lower it if hero text is cut at the
+  frame edge, raise it if the filler takes more than a third of the frame.
 - Use `--max-blur 0.06`: the filler is deep, so 0.1 smears it into ghosted copies.
 - Use `--background '#000000'` on dark sites, so screen edges stay visible against the slightly
   lighter page background.
 
+### One screen
+
+A single trimmed screenshot is close to square, so its center (often the hero headline) sits
+where the blur starts. Prefer the filler layout. If only one page exists, keep the frame filled
+with `--content-width 0.62 --translate-z 260` and check that the headline is still sharp.
+
 ## Avoid
 
-- **Empty borders around a single screen.** If the background shows on any side, raise
+- **Padding in the screenshot.** Keep trimming on. Empty margins make the screen look small and
+  the image empty.
+- **Empty borders around the screens.** If the background shows on any side, raise
   `--translate-z` or `--content-width`.
 - **Drastic angles.** `--rotate-y` beyond about 20 with one screen, `--perspective` below 900, or
   `--rotate-z` beyond 4 look like a gimmick.

@@ -107,8 +107,9 @@ cli
       WebGL2, writes the image, then closes the tab. The image type comes
       from the \`--out\` extension: png, jpg or webp.
 
-      The screens row is \`--content-width\` of the frame wide and keeps the
-      image aspect ratios. Tune the angle with \`--rotate-x\`, \`--rotate-y\` and
+      Empty margins (the corner color) are cropped off each image first,
+      keeping \`--trim-padding\` px. The screens row is \`--content-width\` of
+      the frame wide and keeps the image aspect ratios. Tune the angle with \`--rotate-x\`, \`--rotate-y\` and
       \`--perspective\`; use \`--debug\` to see the depth ramp that drives the blur.
     `,
   )
@@ -118,6 +119,8 @@ cli
   .option('--scale [ratio]', z.number().default(2).describe('Device pixel ratio of the output image'))
   .option('--content-width [fraction]', z.number().default(0.8).describe('Screens row width as a fraction of the frame width. Above 1 the plane grows past the frame'))
   .option('--gap [px]', z.number().default(48).describe('Space between screens in css px'))
+  .option('--trim-padding [px]', z.number().default(40).describe('Image px of padding kept when cropping empty margins'))
+  .option('--no-trim', 'Keep empty margins instead of cropping them off each image')
   .option('--radius [px]', z.number().default(12).describe('Screen corner radius in css px'))
   .option('--perspective [px]', z.number().default(d.perspective).describe('Camera distance in px. Smaller is more dramatic'))
   .option('--rotate-x [deg]', z.number().default(d.rotateX).describe('Tilt top/bottom in degrees. Positive brings the top closer'))
@@ -140,7 +143,7 @@ cli
   .example('# Steeper angle, white background, jpg')
   .example('angled-screen screenshot.png -o hero.jpg --rotate-y=-24 --rotate-x 11 --perspective 720 --background "#ffffff"')
   .example('# Two pages side by side on one plane')
-  .example('angled-screen home.png download.png -o hero.png --content-width 1.7 --rotate-y 16 --translate-z 150 --translate-x 580')
+  .example('angled-screen home.png download.png -o hero.png --content-width 1.5 --rotate-y 16 --translate-z 0 --translate-x 400')
   .action(async (imageArgs, options, { console }) => {
     const inputPaths = imageArgs.map((arg) => path.resolve(arg))
     const missing = inputPaths.find((p) => !fs.existsSync(p))
@@ -160,6 +163,7 @@ cli
       scale: options.scale,
       contentWidth: options.contentWidth,
       gap: options.gap,
+      trim: options.noTrim ? false : options.trimPadding,
       imageCount: inputPaths.length,
       radius: options.radius,
       type,

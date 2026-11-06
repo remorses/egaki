@@ -594,7 +594,7 @@ export function createAngledScreenRenderer({
 
 export interface RenderImageOptions {
   /** One or more screens, laid out left to right on the same tilted plane. */
-  images: Array<ImageBitmap | HTMLImageElement>
+  images: Array<ImageBitmap | HTMLImageElement | OffscreenCanvas>
   /** Output frame width in css px. Default 1920. */
   width?: number
   /** Output frame height in css px. Default 1080. */
@@ -606,6 +606,9 @@ export interface RenderImageOptions {
   contentWidth?: number
   /** Space between screens in css px. Default 48. */
   gap?: number
+  /** Crop empty margins (the corner color) off each image, keeping this many image px of
+   *  padding. Set false to keep images as they are. Default 40. */
+  trim?: number | false
   /** Screen corner radius in css px. Default 12. */
   radius?: number
   /** Seconds, seeds the film grain. Default 0. */
@@ -617,6 +620,55 @@ export interface RenderImageOptions {
   quality?: number
 }
 
+/**
+ * Crop the empty margins of a screenshot: rows and columns that only contain
+ * the top-left corner color. Keeps `padding` image px around the content.
+ */
+export function trimImage({
+  image,
+  padding = 40,
+  tolerance = 12,
+}: {
+  image: ImageBitmap | HTMLImageElement | OffscreenCanvas
+  padding?: number
+  /** Max per-channel difference from the corner color that still counts as empty. */
+  tolerance?: number
+}): OffscreenCanvas {
+  const { width, height } = image
+  const source = new OffscreenCanvas(width, height)
+  const ctx = source.getContext('2d')
+  if (!ctx) throw new Error('[angled-screen] 2D canvas unavailable')
+  ctx.drawImage(image, 0, 0)
+  const data = ctx.getImageData(0, 0, width, height).data
+  const [r0, g0, b0] = [data[0]!, data[1]!, data[2]!]
+  let left = width
+  let right = -1
+  let top = height
+  let bottom = -1
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4
+      const empty =
+        Math.abs(data[i]! - r0) <= tolerance &&
+        Math.abs(data[i + 1]! - g0) <= tolerance &&
+        Math.abs(data[i + 2]! - b0) <= tolerance
+      if (empty) continue
+      if (x < left) left = x
+      if (x > right) right = x
+      if (y < top) top = y
+      if (y > bottom) bottom = y
+    }
+  }
+  if (right < 0) return source
+  left = Math.max(0, left - padding)
+  top = Math.max(0, top - padding)
+  right = Math.min(width - 1, right + padding)
+  bottom = Math.min(height - 1, bottom + padding)
+  const cropped = new OffscreenCanvas(right - left + 1, bottom - top + 1)
+  cropped.getContext('2d')!.drawImage(source, -left, -top)
+  return cropped
+}
+
 /** Render images as screens on one angled plane and encode the frame. Browser only. */
 export async function renderImage({
   images,
@@ -625,6 +677,7 @@ export async function renderImage({
   scale = 2,
   contentWidth = 0.8,
   gap = 48,
+  trim = 40,
   radius = 12,
   time = 0,
   params,
@@ -632,6 +685,9 @@ export async function renderImage({
   quality,
 }: RenderImageOptions): Promise<Blob> {
   if (images.length === 0) throw new Error('[angled-screen] renderImage needs at least one image')
+  if (trim !== false) {
+    images = images.map((image) => trimImage({ image, padding: trim }))
+  }
   const pixelWidth = Math.round(width * scale)
   const pixelHeight = Math.round(height * scale)
 

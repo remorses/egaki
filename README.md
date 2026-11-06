@@ -941,8 +941,10 @@ on the near one; the next page shows as a soft filler at the far edge, which
 helps thin sites fill the frame:
 
 ```bash
-npx @egaki/angled-screen home.png download.png -o hero.jpg --content-width 1.7 --rotate-y 16 --translate-z 150 --translate-x 580
+npx @egaki/angled-screen home.png download.png -o hero.jpg --content-width 1.5 --rotate-y 16 --translate-z 0 --translate-x 400
 ```
+
+Empty margins are cropped off each screenshot first (`--trim-padding`, `--no-trim`).
 
 Options use the same names and defaults as the props above, in kebab case
 (`--grain` is `grainIntensity`, `--background` is `backgroundColor`). Write
@@ -956,6 +958,7 @@ import { renderImage } from '@egaki/angled-screen'
 
 const image = await createImageBitmap(file)
 const png = await renderImage({ images: [image], params: { rotateY: -20, fog: 0.2 } })
+// trimImage({ image }) crops empty margins; renderImage does it by default
 ```
 
 `createAngledScreenRenderer({ canvas })` gives lower level control: upload a
