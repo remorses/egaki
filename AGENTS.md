@@ -18,9 +18,10 @@ Load the `changesets` skill before a bug fix or a new feature. Add a
 format, package rules, issue references, and filename rules. See
 `.changeset/readme.md`.
 
-The publishable package is `egaki`. Also list `@egaki/midjourney` when that
-package changes. Do not add changesets for example apps. `egaki-website` and
-`egaki-gateway` have no `version` field, so skip them.
+The publishable package is `egaki`. Also list `@egaki/midjourney` or
+`@egaki/angled-screen` when those packages change. Do not add changesets for
+example apps. `egaki-website` and `egaki-gateway` have no `version` field, so
+skip them.
 
 If the change fixes a GitHub issue, put `Fixes #123` on its own line in the
 changeset. Publish reads that line and closes the issue. Do not edit
@@ -392,6 +393,25 @@ resetting each other via scope IDs on DOM elements.
 If `motion` is not installed: no `<script>` injected, no `motion-timing.ts`
 imported, `MotionTimingSync` is a passthrough. `motion-timing.ts` is excluded
 from tsc (optional peer deps).
+
+## `@egaki/angled-screen` package
+
+`angled-screen/` holds the framework-free WebGL2 angled screen renderer and
+its CLI. egaki imports it as source (`@egaki/angled-screen/src`), so the
+shader, defaults and GL helpers exist only there.
+
+```
+angled-screen/src/index.ts   shader, ANGLED_SCREEN_DEFAULTS, createAngledScreenRenderer,
+   │                         renderImage, compileGlShader / linkGlProgram / parseHexColor
+   ├──▶ cli/src/vite/angled-screen-shader.tsx   AngledScreen: Remotion timing, tweakpane,
+   │                                            HTML-in-canvas upload, export mirror canvas
+   ├──▶ cli/src/vite/shader-renderer.tsx        defineShader: shared GL helpers only
+   └──▶ angled-screen/src/cli.ts                goke CLI: node:http serves dist/index.js +
+                                                input, playwriter tab renders, POSTs result
+```
+
+The CLI page imports `/index.js` from the package `dist/`, so run
+`pnpm build` in `angled-screen/` before testing the CLI from source.
 
 ## Porting Framer shader components
 

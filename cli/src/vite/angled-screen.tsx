@@ -25,6 +25,7 @@
  */
 
 import { type CSSProperties, type ReactNode } from 'react'
+import { ANGLED_SCREEN_DEFAULTS } from '@egaki/angled-screen/src'
 import { useTweakpane } from './tweakpane-hook.tsx'
 
 export interface BasicAngledScreenProps {
@@ -105,19 +106,20 @@ export function BasicAngledScreen(props: BasicAngledScreenProps) {
     children,
     transformOrigin = '50% 50%',
     bokehDirection,
-    backgroundColor = '#000000',
+    backgroundColor = ANGLED_SCREEN_DEFAULTS.backgroundColor,
     width = '80%',
     height = 'auto',
     style,
   } = props
 
+  const d = ANGLED_SCREEN_DEFAULTS
   const tp = useTweakpane('BasicAngledScreen', {
-    perspective: { value: props.perspective ?? 1200, min: 100, max: 3000, step: 10 },
-    rotateX: { value: props.rotateX ?? 8, min: -90, max: 90, step: 0.5 },
-    rotateY: { value: props.rotateY ?? -12, min: -90, max: 90, step: 0.5 },
-    rotateZ: { value: props.rotateZ ?? 0, min: -180, max: 180, step: 0.5 },
-    translateZ: { value: props.translateZ ?? 0, min: -500, max: 500, step: 1 },
-    bokeh: props.bokeh ?? true,
+    perspective: { value: props.perspective ?? d.perspective, min: 100, max: 3000, step: 10 },
+    rotateX: { value: props.rotateX ?? d.rotateX, min: -90, max: 90, step: 0.5 },
+    rotateY: { value: props.rotateY ?? d.rotateY, min: -90, max: 90, step: 0.5 },
+    rotateZ: { value: props.rotateZ ?? d.rotateZ, min: -180, max: 180, step: 0.5 },
+    translateZ: { value: props.translateZ ?? d.translateZ, min: -500, max: 500, step: 1 },
+    bokeh: props.bokeh ?? d.bokeh,
     bokehBlur: { value: props.bokehBlur ?? 12, min: 0, max: 50, step: 0.5 },
     bokehOffset: { value: props.bokehOffset ?? 0.3, min: 0, max: 1, step: 0.01 },
     debug: props.debug ?? false,

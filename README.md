@@ -925,6 +925,34 @@ When unsupported it falls back automatically to `BasicAngledScreen`, the
 `backdrop-filter` blur instead of true depth-of-field). Don't use it
 directly in new videos; the fallback is automatic.
 
+### Angled screen images without egaki
+
+The shader lives in its own package, **`@egaki/angled-screen`**. Its CLI turns
+any image into an angled screen PNG, JPG or WebP. It renders in your Chrome
+through the [Playwriter](https://playwriter.dev) extension and needs no Chrome flags:
+
+```bash
+npx @egaki/angled-screen screenshot.png -o hero.png
+npx @egaki/angled-screen screenshot.png -o hero.jpg --rotate-y=-24 --rotate-x 11 --perspective 720 --background '#ffffff'
+```
+
+Options use the same names and defaults as the props above, in kebab case
+(`--grain` is `grainIntensity`, `--background` is `backgroundColor`). Write
+negative values with `=`, like `--rotate-y=-24`. Run
+`npx @egaki/angled-screen --help` for all of them.
+
+In a web app, import the renderer directly. It has no dependencies:
+
+```ts
+import { renderImage } from '@egaki/angled-screen'
+
+const image = await createImageBitmap(file)
+const png = await renderImage({ image, params: { rotateY: -20, fog: 0.2 } })
+```
+
+`createAngledScreenRenderer({ canvas })` gives lower level control: upload a
+texture with `uploadImage` or `uploadElementImage`, then call `draw` per frame.
+
 ## Easing presets
 
 Import from `egaki/video`. **Always use `cubicBezier()` from `egaki/video`

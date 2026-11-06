@@ -30,6 +30,12 @@
 import { useCurrentFrame, useVideoConfig } from 'remotion'
 import { useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { useTweakpane } from './tweakpane-hook.tsx'
+import {
+  compileGlShader,
+  FULLSCREEN_VERTEX_SHADER,
+  linkGlProgram,
+  parseHexColor,
+} from '@egaki/angled-screen/src'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,46 +73,8 @@ export interface ShaderConfig {
 }
 
 // ---------------------------------------------------------------------------
-// Color parsing
-// ---------------------------------------------------------------------------
-
-/** Parse a hex color string (#RGB, #RRGGBB, #RRGGBBAA) to [r, g, b, a] in 0-1 range. */
-export function parseHexColor(hex: string): [number, number, number, number] {
-  let h = hex.replace('#', '')
-  if (h.length === 3 || h.length === 4) {
-    h = h
-      .split('')
-      .map((c) => c + c)
-      .join('')
-  }
-  const r = parseInt(h.slice(0, 2), 16) / 255
-  const g = parseInt(h.slice(2, 4), 16) / 255
-  const b = parseInt(h.slice(4, 6), 16) / 255
-  const a = h.length >= 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1
-  return [r, g, b, a]
-}
-
-// ---------------------------------------------------------------------------
 // GLSL constants
 // ---------------------------------------------------------------------------
-
-/**
- * Fullscreen quad vertex shader. Two attributes:
- *   a_position — clip-space quad corners (2 triangles covering [-1,1]²)
- *   a_texCoord — UV coordinates [0,1]² passed as v_uv to the fragment shader
- *
- * Identical to Framer's DEFAULT_VERTEX_SHADER (framer.js:51184-51196).
- */
-const VERTEX_SHADER = `#version 300 es
-precision highp float;
-in vec2 a_position;
-in vec2 a_texCoord;
-out vec2 v_uv;
-void main() {
-  v_uv = a_texCoord;
-  gl_Position = vec4(a_position, 0.0, 1.0);
-}
-`
 
 /**
  * Build the full fragment shader source by prepending uniform declarations
@@ -166,45 +134,6 @@ function generateFragmentSource(
 
   lines.push(body)
   return lines.join('\n')
-}
-
-// ---------------------------------------------------------------------------
-// WebGL helpers
-// ---------------------------------------------------------------------------
-
-export function compileGlShader(
-  gl: WebGL2RenderingContext,
-  type: number,
-  source: string,
-): WebGLShader {
-  const shader = gl.createShader(type)
-  if (!shader) throw new Error('Failed to create shader')
-  gl.shaderSource(shader, source)
-  gl.compileShader(shader)
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const log = gl.getShaderInfoLog(shader)
-    gl.deleteShader(shader)
-    throw new Error(`Shader compile error:\n${log}`)
-  }
-  return shader
-}
-
-export function linkGlProgram(
-  gl: WebGL2RenderingContext,
-  vs: WebGLShader,
-  fs: WebGLShader,
-): WebGLProgram {
-  const program = gl.createProgram()
-  if (!program) throw new Error('Failed to create program')
-  gl.attachShader(program, vs)
-  gl.attachShader(program, fs)
-  gl.linkProgram(program)
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    const log = gl.getProgramInfoLog(program)
-    gl.deleteProgram(program)
-    throw new Error(`Program link error:\n${log}`)
-  }
-  return program
 }
 
 // Pre-computed metadata for hot-path uniform updates during draw
@@ -371,7 +300,7 @@ export function defineShader(config: ShaderConfig) {
       let vs: WebGLShader | null = null
       let fs: WebGLShader | null = null
       try {
-        vs = compileGlShader(gl, gl.VERTEX_SHADER, VERTEX_SHADER)
+        vs = compileGlShader(gl, gl.VERTEX_SHADER, FULLSCREEN_VERTEX_SHADER)
         fs = compileGlShader(gl, gl.FRAGMENT_SHADER, fragmentSource)
         const program = linkGlProgram(gl, vs, fs)
         // Shaders can be deleted after successful link

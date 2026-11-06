@@ -13,6 +13,7 @@ This folder contains **pending release notes**. Each `.md` file describes one us
 
 - `egaki` for CLI and video-framework changes
 - `@egaki/midjourney` when that package changes
+- `@egaki/angled-screen` when the angled screen shader or its CLI changes
 
 ## What not to put here
 

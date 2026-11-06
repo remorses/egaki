@@ -93,6 +93,7 @@
     "@ai-sdk/replicate": "2.0.20",
     "@ai-sdk/xai": "^3.0.139",
     "@clack/prompts": "^1.0.1",
+    "@egaki/angled-screen": "workspace:^",
     "@fal-ai/client": "^1.10.1",
     "@remotion/media": "4.0.494",
     "@remotion/player": "4.0.494",
