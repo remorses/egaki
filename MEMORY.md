@@ -353,7 +353,7 @@ Searched Remotion source for premount detection mechanism. **FINDING: No public 
 
 ### Chromium HTML-in-canvas API is unstable across builds
 
-Canary 152.0.7959 changed `texElementImage2D` to a 3-arg form `(target, sizedInternalformat, element)` requiring RGBA8/SRGB8_ALPHA8/RGBA16F/RGBA32F; Chrome 149-151 use the 6-arg form from Remotion docs. Feature-detect via `gl.texElementImage2D.length <= 3` (see angled-screen-shader.tsx). Same Canary also broke Remotion 4.0.494's nested-capture probe, so web-renderer exports of nested `<HtmlInCanvas>` use the DOM composer; egaki survives that path via mirror canvas + visibility:visible override + scoped useDelayRender (see angled-screen-shader.tsx header).
+Chrome 152.0.7959 changed `texElementImage2D` to a 3-arg form `(target, sizedInternalformat, element)` requiring RGBA8/SRGB8_ALPHA8/RGBA16F/RGBA32F; Chrome 149-151 use the 6-arg form from Remotion docs. Feature-detect via `gl.texElementImage2D.length <= 3` (see angled-screen-shader.tsx). The same Chrome build also broke Remotion 4.0.494's nested-capture probe, so web-renderer exports of nested `<HtmlInCanvas>` use the DOM composer; egaki survives that path via mirror canvas + visibility:visible override + scoped useDelayRender (see angled-screen-shader.tsx header).
 
 ### remotion < 4.0.491 blocks WebGL in HtmlInCanvas onInit
 
@@ -371,6 +371,6 @@ HtmlInCanvasContent calls global delayRender() (window scope) but continues via 
 
 Any delayRender handle released from an HtmlInCanvas onPaint callback hangs the export if the canvas sits under a visibility:hidden ancestor (Chromium creates no paint records for hidden subtrees, so paint never fires). LayoutTransition ghosts/inactive instances hide via visibility:hidden (deadlock); remotion premount hides via opacity:0 (safe, paint still fires). Gate handle registration on getComputedStyle(canvas).visibility — see angled-screen-shader.tsx.
 
-### Browser testing: user's Canary is pre-configured, use plain playwriter
+### Browser testing: use plain playwriter in the user's Chrome
 
-Tommy's Chrome Canary already has canvas-draw-element enabled AND the playwriter extension. Never launch a separate Canary (--user-data-dir/--remote-debugging-port) and never use PLAYWRITER_DIRECT — direct CDP mode causes relay conflicts and lost sessions. Plain `playwriter session new` + browser picker is the correct flow (also documented in AGENTS.md).
+HTML-in-canvas works in Tommy's regular Chrome, which has the playwriter extension. Never launch a separate browser (--user-data-dir/--remote-debugging-port) and never use PLAYWRITER_DIRECT, because direct CDP mode causes relay conflicts and lost sessions. Plain `playwriter session new` is the correct flow (also documented in AGENTS.md).

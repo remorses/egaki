@@ -512,20 +512,17 @@ cd example-video && pnpm run test-e2e
 Playwright starts Vite on port **5199**, runs `example-video/e2e/hmr.test.ts`
 serially. Reuses an existing server on 5199 when not in CI.
 
-## Browser testing: use the user's Canary via normal playwriter
+## Browser testing: use the user's Chrome via normal playwriter
 
-The user's Chrome Canary is ALREADY fully set up: canvas-draw-element flag
-enabled and the playwriter extension installed. To test AngledScreen,
-HtmlInCanvas, exports, or anything else in the browser:
+HTML-in-canvas works in the user's regular Chrome, which already has the
+playwriter extension. To test AngledScreen, HtmlInCanvas, exports, or anything
+else in the browser:
 
-- Use plain `playwriter session new` and pick the Canary browser from the
-  picker if multiple browsers are listed.
-- NEVER launch a separate Canary instance with `--user-data-dir` /
-  `--remote-debugging-port` / `--enable-blink-features`.
+- Use plain `playwriter session new` with the user's normal Chrome.
+- NEVER launch a separate browser instance with `--user-data-dir`,
+  `--remote-debugging-port` or `--enable-blink-features`.
 - NEVER use `PLAYWRITER_DIRECT` or `--direct` CDP mode. The extension flow
   is the correct path; direct mode causes relay conflicts and lost sessions.
-- There is no missing Chrome flag to work around. Do not assume the flag is
-  absent — it is enabled in the user's Canary.
 
 ## Agent SDK (`window.egakiSDK`)
 
