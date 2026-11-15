@@ -9,15 +9,15 @@
   "dependencies": {
     "@remotion/media": "4.0.494",
     "@remotion/player": "4.0.494",
-    "example-claude-fusion-launch": "workspace:^",
     "egaki": "workspace:^",
+    "example-claude-fusion-launch": "workspace:^",
     "example-mirror": "workspace:^",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
-    "remotion": "4.0.494",
-    "spiceflow": "1.26.0-rsc.7",
     "example-sun-montage": "workspace:^",
-    "example-testimonial": "workspace:^"
+    "example-testimonial": "workspace:^",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.494",
+    "spiceflow": "1.26.0-rsc.7"
   },
   "devDependencies": {
     "@mdx-js/typescript-plugin": "^0.1.3",

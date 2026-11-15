@@ -13,8 +13,8 @@
     "@remotion/cli": "4.0.521",
     "@remotion/media": "4.0.521",
     "bezier-easing": "3.1.0",
-    "react": "19.2.7",
-    "react-dom": "19.2.7",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "remotion": "4.0.521"
   }
 }
