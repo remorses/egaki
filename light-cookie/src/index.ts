@@ -71,7 +71,8 @@ export interface LightCookieParams {
   softness: number
   /** Shadow cookie blur as a fraction of the cookie size. Shadows sit further from the wall, so softer. */
   shadowSoftness: number
-  /** How dark the shadow cookie is inside the light, 0-1. */
+  /** How dark the strongest part of the shadow cookie is inside the light, 0-1. Leaves and
+   *  birds far from the wall are fainter and softer than this. */
   shadowOpacity: number
   /** Shadow media only: luminance below this casts shadow (soft levels). 0 uses the raw grayscale. */
   shadowThreshold: number
@@ -144,7 +145,7 @@ export const LIGHT_COOKIE_DEFAULTS: LightCookieParams = {
   spill: 0.08,
   softness: 0.009,
   shadowSoftness: 0.016,
-  shadowOpacity: 0.6,
+  shadowOpacity: 0.7,
   shadowThreshold: 0.5,
   shadowInvert: false,
   shadowScale: 1,
@@ -203,6 +204,8 @@ interface Leaf {
   width: number
   angle: number
   phase: number
+  /** Leaf opacity, so overlapping leaves read darker than single ones. */
+  shade: number
 }
 
 interface Branch {
@@ -214,6 +217,8 @@ interface Branch {
   thickness: number
   phase: number
   speed: number
+  /** 0 near the wall (dark, crisp) to 1 far from it (faint, soft). */
+  depth: number
   leaves: Leaf[]
 }
 
@@ -241,6 +246,7 @@ function createBranches(seed: number): Branch[] {
         width: size * (0.022 + rand() * 0.016),
         angle: 0.4 + rand() * 0.7,
         phase: rand() * Math.PI * 2,
+        shade: 0.45 + rand() * 0.25,
       })
     }
     branches.push({
@@ -253,6 +259,7 @@ function createBranches(seed: number): Branch[] {
       phase: rand() * Math.PI * 2,
       // integer cycles per duration so the video loops
       speed: 1 + Math.floor(rand() * 3),
+      depth: (i % DEPTH_LAYERS.length) / (DEPTH_LAYERS.length - 1),
       leaves,
     })
   }
@@ -289,13 +296,15 @@ function drawLightShape(ctx: CanvasRenderingContext2D, preset: LightPreset) {
     ctx.lineTo(c - r, bottom)
     ctx.closePath()
     ctx.fill()
+    // stone mullion blocks almost all light, thin lead lines only part of it
     const bar = full * 0.022
-    ctx.fillStyle = '#000'
+    ctx.fillStyle = 'rgba(0,0,0,0.9)'
     ctx.fillRect(c - bar / 2, top + r * 0.55, bar, bottom - top)
     ctx.fillRect(c - r, top + r * 0.55, w, bar)
-    ctx.fillRect(c - r, c + full * 0.12, w, bar * 0.7)
-    ctx.lineWidth = bar
-    ctx.strokeStyle = '#000'
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'
+    ctx.fillRect(c - r, c + full * 0.12, w, bar * 0.6)
+    ctx.lineWidth = bar * 0.7
+    ctx.strokeStyle = 'rgba(0,0,0,0.55)'
     ctx.beginPath()
     ctx.arc(c, top, r * 0.4, 0, Math.PI * 2)
     ctx.stroke()
@@ -307,15 +316,19 @@ function drawLightShape(ctx: CanvasRenderingContext2D, preset: LightPreset) {
   const x0 = c - w / 2
   const y0 = c - h / 2
   ctx.fillRect(x0, y0, w, h)
-  ctx.fillStyle = '#000'
   if (preset === 'window') {
+    // the center mullion is solid, the thinner glazing bars let some light wrap around
     const bar = full * 0.028
+    ctx.fillStyle = 'rgba(0,0,0,0.9)'
     ctx.fillRect(c - bar / 2, y0, bar, h)
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'
     for (const f of [1 / 3, 2 / 3]) {
-      ctx.fillRect(x0, y0 + h * f - bar / 2, w, bar)
+      ctx.fillRect(x0, y0 + h * f - bar * 0.4, w, bar * 0.8)
     }
     return
   }
+  // fabric slats pass a little light
+  ctx.fillStyle = 'rgba(0,0,0,0.85)'
   const slats = 11
   const pitch = h / slats
   for (let i = 0; i < slats; i++) {
@@ -323,20 +336,44 @@ function drawLightShape(ctx: CanvasRenderingContext2D, preset: LightPreset) {
   }
 }
 
+/**
+ * A part of the shadow cookie with its own darkness and edge blur. Parts far from the wall
+ * are fainter and softer, like real shadows: their penumbra is wider and light wraps around.
+ * Inside a part, shapes can use partial alpha (leaves), so dense clusters read darker than
+ * sparse ones.
+ */
+interface ShadowPart {
+  /** Darkness of a fully opaque shape in this part, 0-1, relative to shadowOpacity. */
+  strength: number
+  /** Edge blur as a multiple of shadowSoftness. */
+  blur: number
+  draw: (ctx: CanvasRenderingContext2D) => void
+}
+
+/** Near, mid and far from the wall. */
+const DEPTH_LAYERS = [
+  { strength: 1, blur: 0.6 },
+  { strength: 0.6, blur: 1.3 },
+  { strength: 0.3, blur: 2.4 },
+]
+
+const depthLayer = (depth: number) => DEPTH_LAYERS[Math.round(depth * (DEPTH_LAYERS.length - 1))]!
+
 /** Birds crossing the window left to right. Integer laps per loop keep videos seamless. */
-function drawBirds(ctx: CanvasRenderingContext2D, { phase, seed }: { phase: number; seed: number }) {
+function birdParts({ phase, seed }: { phase: number; seed: number }): ShadowPart[] {
   const rand = mulberry32(seed)
   const size = COOKIE_SIZE
   const full = size * COOKIE_CONTENT
   const progress = phase / (Math.PI * 2)
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
+  const parts: ShadowPart[] = []
   const count = 4
   for (let i = 0; i < count; i++) {
     const start = rand()
     const laps = 1 + Math.floor(rand() * 2)
     const baseY = size / 2 - full * 0.35 + rand() * full * 0.6
-    const span = full * (0.09 + rand() * 0.06)
+    const depth = rand()
+    // far birds look smaller
+    const span = full * (0.09 + rand() * 0.06) * (1 - depth * 0.35)
     const flaps = 10 + Math.floor(rand() * 8)
     const flapPhase = rand() * Math.PI * 2
     // fly from just outside the left edge to just outside the right edge
@@ -345,74 +382,110 @@ function drawBirds(ctx: CanvasRenderingContext2D, { phase, seed }: { phase: numb
     const y = baseY - t * full * 0.12 + Math.sin(phase * 2 + i) * full * 0.015
     const flap = Math.sin(phase * flaps + flapPhase)
     const tipY = -flap * span * 0.35
-    ctx.lineWidth = span * 0.11
-    ctx.beginPath()
-    ctx.moveTo(x - span / 2, y + tipY)
-    ctx.quadraticCurveTo(x - span * 0.22, y - span * 0.18 + tipY * 0.3, x, y)
-    ctx.quadraticCurveTo(x + span * 0.22, y - span * 0.18 + tipY * 0.3, x + span / 2, y + tipY)
-    ctx.stroke()
-    ctx.beginPath()
-    ctx.ellipse(x, y + span * 0.02, span * 0.09, span * 0.05, 0, 0, Math.PI * 2)
-    ctx.fill()
+    parts.push({
+      ...depthLayer(depth),
+      draw(ctx) {
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        ctx.lineWidth = span * 0.11
+        ctx.beginPath()
+        ctx.moveTo(x - span / 2, y + tipY)
+        ctx.quadraticCurveTo(x - span * 0.22, y - span * 0.18 + tipY * 0.3, x, y)
+        ctx.quadraticCurveTo(x + span * 0.22, y - span * 0.18 + tipY * 0.3, x + span / 2, y + tipY)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.ellipse(x, y + span * 0.02, span * 0.09, span * 0.05, 0, 0, Math.PI * 2)
+        ctx.fill()
+      },
+    })
   }
+  return parts
 }
 
-function drawShadowShape(
-  ctx: CanvasRenderingContext2D,
-  { preset, branches, phase, sway, seed }: { preset: ShadowPreset; branches: Branch[]; phase: number; sway: number; seed: number },
-) {
-  const size = COOKIE_SIZE
-  ctx.fillStyle = '#000'
-  ctx.strokeStyle = '#000'
-  if (preset === 'birds') {
-    drawBirds(ctx, { phase, seed })
-    return
-  }
-  if (preset === 'bars') {
-    const full = size * COOKIE_CONTENT
-    const offset = Math.sin(phase) * full * 0.01 * sway
-    for (let i = 1; i < 5; i++) {
-      const x = size / 2 - full / 2 + (full * i) / 5 + offset
-      ctx.fillRect(x - full * 0.012, 0, full * 0.024, size)
-    }
-    return
-  }
-  if (preset !== 'leaves') return
+function leafParts({ branches, phase, sway }: { branches: Branch[]; phase: number; sway: number }): ShadowPart[] {
   const swayRad = (sway * Math.PI) / 180
-  for (const b of branches) {
+  return branches.flatMap((b) => {
     const angle = b.angle + swayRad * Math.sin(phase * b.speed + b.phase)
     // quadratic curve from the base, bent sideways
     const ex = b.x + Math.cos(angle) * b.length
     const ey = b.y + Math.sin(angle) * b.length
     const mx = (b.x + ex) / 2 + Math.cos(angle + Math.PI / 2) * b.length * b.bend
     const my = (b.y + ey) / 2 + Math.sin(angle + Math.PI / 2) * b.length * b.bend
-    ctx.lineWidth = b.thickness
-    ctx.lineCap = 'round'
-    ctx.beginPath()
-    ctx.moveTo(b.x, b.y)
-    ctx.quadraticCurveTo(mx, my, ex, ey)
-    ctx.stroke()
-    for (const leaf of b.leaves) {
-      const t = leaf.at
-      const px = (1 - t) * (1 - t) * b.x + 2 * (1 - t) * t * mx + t * t * ex
-      const py = (1 - t) * (1 - t) * b.y + 2 * (1 - t) * t * my + t * t * ey
-      // tangent of the curve
-      const tx = 2 * (1 - t) * (mx - b.x) + 2 * t * (ex - mx)
-      const ty = 2 * (1 - t) * (my - b.y) + 2 * t * (ey - my)
-      const flutter = swayRad * 2 * Math.sin(phase * (b.speed + 1) + leaf.phase)
-      const a = Math.atan2(ty, tx) + leaf.side * leaf.angle + flutter
-      ctx.save()
-      ctx.translate(px, py)
-      ctx.rotate(a)
-      ctx.beginPath()
-      // leaf: pointed ellipse from the stem outward
-      ctx.moveTo(0, 0)
-      ctx.quadraticCurveTo(leaf.length * 0.5, -leaf.width, leaf.length, 0)
-      ctx.quadraticCurveTo(leaf.length * 0.5, leaf.width, 0, 0)
-      ctx.fill()
-      ctx.restore()
+    const layer = depthLayer(b.depth)
+    const twig: ShadowPart = {
+      ...layer,
+      draw(ctx) {
+        ctx.lineWidth = b.thickness
+        ctx.lineCap = 'round'
+        ctx.beginPath()
+        ctx.moveTo(b.x, b.y)
+        ctx.quadraticCurveTo(mx, my, ex, ey)
+        ctx.stroke()
+      },
     }
+    const leaves: ShadowPart = {
+      ...layer,
+      draw(ctx) {
+        for (const leaf of b.leaves) {
+          const t = leaf.at
+          const px = (1 - t) * (1 - t) * b.x + 2 * (1 - t) * t * mx + t * t * ex
+          const py = (1 - t) * (1 - t) * b.y + 2 * (1 - t) * t * my + t * t * ey
+          // tangent of the curve
+          const tx = 2 * (1 - t) * (mx - b.x) + 2 * t * (ex - mx)
+          const ty = 2 * (1 - t) * (my - b.y) + 2 * t * (ey - my)
+          const flutter = swayRad * 2 * Math.sin(phase * (b.speed + 1) + leaf.phase)
+          const a = Math.atan2(ty, tx) + leaf.side * leaf.angle + flutter
+          ctx.save()
+          ctx.translate(px, py)
+          ctx.rotate(a)
+          ctx.globalAlpha = leaf.shade
+          ctx.beginPath()
+          // leaf: pointed ellipse from the stem outward
+          ctx.moveTo(0, 0)
+          ctx.quadraticCurveTo(leaf.length * 0.5, -leaf.width, leaf.length, 0)
+          ctx.quadraticCurveTo(leaf.length * 0.5, leaf.width, 0, 0)
+          ctx.fill()
+          ctx.restore()
+        }
+      },
+    }
+    return [twig, leaves]
+  })
+}
+
+function shadowParts({
+  preset,
+  branches,
+  phase,
+  sway,
+  seed,
+}: {
+  preset: ShadowPreset
+  branches: Branch[]
+  phase: number
+  sway: number
+  seed: number
+}): ShadowPart[] {
+  if (preset === 'birds') return birdParts({ phase, seed })
+  if (preset === 'leaves') return leafParts({ branches, phase, sway })
+  if (preset === 'bars') {
+    const size = COOKIE_SIZE
+    const full = size * COOKIE_CONTENT
+    const offset = Math.sin(phase) * full * 0.01 * sway
+    return [
+      {
+        strength: 1,
+        blur: 1,
+        draw(ctx) {
+          for (let i = 1; i < 5; i++) {
+            const x = size / 2 - full / 2 + (full * i) / 5 + offset
+            ctx.fillRect(x - full * 0.012, 0, full * 0.024, size)
+          }
+        },
+      },
+    ]
   }
+  return []
 }
 
 function canvas2d(size: number) {
@@ -467,6 +540,7 @@ function createCookie({ lightMedia, shadowMedia }: { lightMedia?: Media; shadowM
   const out = canvas2d(COOKIE_SIZE)
   const light = canvas2d(COOKIE_SIZE)
   const mask = canvas2d(COOKIE_SIZE)
+  const part = canvas2d(COOKIE_SIZE)
   const shadow = canvas2d(COOKIE_SIZE)
   const texture = new THREE.CanvasTexture(out.canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -495,31 +569,50 @@ function createCookie({ lightMedia, shadowMedia }: { lightMedia?: Media; shadowM
       drawLightShape(light.ctx, p.lightCookie)
     }
 
-    // mask: white is lit, black casts shadow. Placement applies to every shadow
+    // mask: white is lit, black casts shadow. Each part is drawn alone, then blurred and
+    // darkened by its own values. Placement applies to every part.
+    mask.ctx.globalAlpha = 1
     mask.ctx.filter = 'none'
     mask.ctx.fillStyle = '#fff'
     mask.ctx.fillRect(0, 0, size, size)
-    mask.ctx.save()
     const full = size * COOKIE_CONTENT
-    mask.ctx.translate(c + p.shadowX * full, c - p.shadowY * full)
-    if (shadowMedia) mask.ctx.rotate(((p.sway * Math.PI) / 180) * 0.3 * Math.sin(phase))
-    mask.ctx.scale(p.shadowScale, p.shadowScale)
-    mask.ctx.translate(-c, -c)
-    if (shadowMedia) {
-      mask.ctx.filter = lightPassFilter(p)
-      drawMedia({ ctx: mask.ctx, media: shadowMedia })
-    } else {
-      drawShadowShape(mask.ctx, { preset: p.shadowCookie, branches, phase, sway: p.sway, seed: p.seed })
+    const parts: ShadowPart[] = shadowMedia
+      ? [
+          {
+            strength: 1,
+            blur: 1,
+            draw(ctx) {
+              // dark media pixels cast shadow: the part is multiplied onto the white mask
+              ctx.filter = lightPassFilter(p)
+              drawMedia({ ctx, media: shadowMedia })
+            },
+          },
+        ]
+      : shadowParts({ preset: p.shadowCookie, branches, phase, sway: p.sway, seed: p.seed })
+    for (const { strength, blur, draw } of parts) {
+      part.ctx.clearRect(0, 0, size, size)
+      part.ctx.save()
+      part.ctx.fillStyle = '#000'
+      part.ctx.strokeStyle = '#000'
+      part.ctx.translate(c + p.shadowX * full, c - p.shadowY * full)
+      if (shadowMedia) part.ctx.rotate(((p.sway * Math.PI) / 180) * 0.3 * Math.sin(phase))
+      part.ctx.scale(p.shadowScale, p.shadowScale)
+      part.ctx.translate(-c, -c)
+      draw(part.ctx)
+      part.ctx.restore()
+      mask.ctx.filter = `blur(${p.shadowSoftness * size * blur}px)`
+      mask.ctx.globalAlpha = strength
+      mask.ctx.globalCompositeOperation = shadowMedia ? 'multiply' : 'source-over'
+      mask.ctx.drawImage(part.canvas, 0, 0)
     }
-    mask.ctx.restore()
+    mask.ctx.globalCompositeOperation = 'source-over'
 
-    // shadow layer: white, darkened by the blurred mask at shadowOpacity
+    // shadow layer: white, darkened by the mask at shadowOpacity
     shadow.ctx.filter = 'none'
     shadow.ctx.globalAlpha = 1
     shadow.ctx.globalCompositeOperation = 'source-over'
     shadow.ctx.fillStyle = '#fff'
     shadow.ctx.fillRect(0, 0, size, size)
-    shadow.ctx.filter = `blur(${p.shadowSoftness * size}px)`
     shadow.ctx.globalAlpha = p.shadowOpacity
     shadow.ctx.globalCompositeOperation = 'multiply'
     shadow.ctx.drawImage(mask.canvas, 0, 0)

@@ -83,7 +83,10 @@ change one thing at a time.
 - **Motion stays subtle.** Defaults loop over `--duration`. Raise `--light-drift` to 0.05 and
   `--sway` to 5 for more visible movement; more looks like a moving lamp, not the sun.
 - **Seamless loops** need `--push 0`; push is the only motion that does not loop.
-- **Shadow strength:** `--shadow-opacity` (default 0.6) sets how dark the shadows are and
+- **Relative values:** cookies are not flat black. Leaves and birds sit at three depths: near
+  ones are dark and crisp, far ones faint and soft, and single leaves are lighter than
+  overlapping clusters. Thin glazing and lead bars block less light than the main mullion.
+- **Shadow strength:** `--shadow-opacity` (default 0.7) sets how dark the strongest part is and
   `--shadow-softness` (default 0.016, 0.005 for shadow media) how blurred. Raise `--ambient` to lift the whole room.
 - Use `--scale 0.5` while tuning stills, the default 2 only for the final export.
 - `--debug-cookie` writes the cookie texture itself, to check the leaves and window shape.

@@ -274,7 +274,7 @@ cli
   .option('--spill [fraction]', z.number().default(d.spill).describe('Soft glow around the patch, fraction of the key light'))
   .option('--softness [fraction]', z.number().default(d.softness).describe('Window edge blur, fraction of the cookie size'))
   .option('--shadow-softness [fraction]', z.number().optional().describe(`Shadow blur, fraction of the cookie size. Higher is softer (default: ${d.shadowSoftness}, ${MEDIA_SHADOW_SOFTNESS} for shadow media so the silhouette reads)`))
-  .option('--shadow-opacity [value]', z.number().default(d.shadowOpacity).describe('How dark the shadows are inside the light, 0-1'))
+  .option('--shadow-opacity [value]', z.number().default(d.shadowOpacity).describe('How dark the strongest shadow part is, 0-1. Far leaves and birds are fainter and softer'))
   .option('--shadow-threshold [value]', z.number().default(d.shadowThreshold).describe('Shadow media: luminance below this casts shadow. 0 keeps the grays'))
   .option('--shadow-invert', z.boolean().default(false).describe('Shadow media: bright pixels cast shadow instead of dark ones'))
   .option('--shadow-scale [ratio]', z.number().default(d.shadowScale).describe('Shadow size relative to the window'))
