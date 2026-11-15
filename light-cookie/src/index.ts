@@ -23,8 +23,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js'
 
-export const LIGHT_PRESETS = ['window', 'blinds', 'beam', 'none'] as const
-export const SHADOW_PRESETS = ['leaves', 'bars', 'none'] as const
+export const LIGHT_PRESETS = ['window', 'church', 'blinds', 'beam', 'none'] as const
+export const SHADOW_PRESETS = ['leaves', 'birds', 'bars', 'none'] as const
 export type LightPreset = (typeof LIGHT_PRESETS)[number]
 export type ShadowPreset = (typeof SHADOW_PRESETS)[number]
 
@@ -277,6 +277,30 @@ function drawLightShape(ctx: CanvasRenderingContext2D, preset: LightPreset) {
     ctx.fillRect(c - full * 0.14, c - full / 2, full * 0.28, full)
     return
   }
+  if (preset === 'church') {
+    // tall round-arched window: two lancets under a round oculus, lead bars between
+    const w = full * 0.52
+    const r = w / 2
+    const top = c - full / 2 + r
+    const bottom = c + full / 2
+    ctx.beginPath()
+    ctx.arc(c, top, r, Math.PI, 0)
+    ctx.lineTo(c + r, bottom)
+    ctx.lineTo(c - r, bottom)
+    ctx.closePath()
+    ctx.fill()
+    const bar = full * 0.022
+    ctx.fillStyle = '#000'
+    ctx.fillRect(c - bar / 2, top + r * 0.55, bar, bottom - top)
+    ctx.fillRect(c - r, top + r * 0.55, w, bar)
+    ctx.fillRect(c - r, c + full * 0.12, w, bar * 0.7)
+    ctx.lineWidth = bar
+    ctx.strokeStyle = '#000'
+    ctx.beginPath()
+    ctx.arc(c, top, r * 0.4, 0, Math.PI * 2)
+    ctx.stroke()
+    return
+  }
   // window: tall frame with panes, blinds: same frame with slats
   const w = full * 0.8
   const h = full
@@ -299,13 +323,51 @@ function drawLightShape(ctx: CanvasRenderingContext2D, preset: LightPreset) {
   }
 }
 
+/** Birds crossing the window left to right. Integer laps per loop keep videos seamless. */
+function drawBirds(ctx: CanvasRenderingContext2D, { phase, seed }: { phase: number; seed: number }) {
+  const rand = mulberry32(seed)
+  const size = COOKIE_SIZE
+  const full = size * COOKIE_CONTENT
+  const progress = phase / (Math.PI * 2)
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  const count = 4
+  for (let i = 0; i < count; i++) {
+    const start = rand()
+    const laps = 1 + Math.floor(rand() * 2)
+    const baseY = size / 2 - full * 0.35 + rand() * full * 0.6
+    const span = full * (0.09 + rand() * 0.06)
+    const flaps = 10 + Math.floor(rand() * 8)
+    const flapPhase = rand() * Math.PI * 2
+    // fly from just outside the left edge to just outside the right edge
+    const t = (start + progress * laps) % 1
+    const x = size / 2 - full * 0.65 + t * full * 1.3
+    const y = baseY - t * full * 0.12 + Math.sin(phase * 2 + i) * full * 0.015
+    const flap = Math.sin(phase * flaps + flapPhase)
+    const tipY = -flap * span * 0.35
+    ctx.lineWidth = span * 0.11
+    ctx.beginPath()
+    ctx.moveTo(x - span / 2, y + tipY)
+    ctx.quadraticCurveTo(x - span * 0.22, y - span * 0.18 + tipY * 0.3, x, y)
+    ctx.quadraticCurveTo(x + span * 0.22, y - span * 0.18 + tipY * 0.3, x + span / 2, y + tipY)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.ellipse(x, y + span * 0.02, span * 0.09, span * 0.05, 0, 0, Math.PI * 2)
+    ctx.fill()
+  }
+}
+
 function drawShadowShape(
   ctx: CanvasRenderingContext2D,
-  { preset, branches, phase, sway }: { preset: ShadowPreset; branches: Branch[]; phase: number; sway: number },
+  { preset, branches, phase, sway, seed }: { preset: ShadowPreset; branches: Branch[]; phase: number; sway: number; seed: number },
 ) {
   const size = COOKIE_SIZE
   ctx.fillStyle = '#000'
   ctx.strokeStyle = '#000'
+  if (preset === 'birds') {
+    drawBirds(ctx, { phase, seed })
+    return
+  }
   if (preset === 'bars') {
     const full = size * COOKIE_CONTENT
     const offset = Math.sin(phase) * full * 0.01 * sway
@@ -447,7 +509,7 @@ function createCookie({ lightMedia, shadowMedia }: { lightMedia?: Media; shadowM
       mask.ctx.filter = lightPassFilter(p)
       drawMedia({ ctx: mask.ctx, media: shadowMedia })
     } else {
-      drawShadowShape(mask.ctx, { preset: p.shadowCookie, branches, phase, sway: p.sway })
+      drawShadowShape(mask.ctx, { preset: p.shadowCookie, branches, phase, sway: p.sway, seed: p.seed })
     }
     mask.ctx.restore()
 

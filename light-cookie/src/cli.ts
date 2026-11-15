@@ -284,7 +284,7 @@ cli
   .option('--ambient-color [hex]', hex.default(d.ambientColor).describe('Fill light color'))
   .option('--relief [value]', z.number().default(d.relief).describe('Surface relief from the image (bump). 0 is flat'))
   .option('--gloss [value]', z.number().default(d.gloss).describe('Surface sheen, 0-1'))
-  .option('--seed [n]', z.number().default(d.seed).describe('Leaf layout seed'))
+  .option('--seed [n]', z.number().default(d.seed).describe('Layout seed for leaves and birds'))
   // motion
   .option('--light-drift [fraction]', z.number().default(d.lightDrift).describe('How far the light patch drifts, fraction of the frame width'))
   .option('--sway [deg]', z.number().default(d.sway).describe('Leaf sway; shadow media rock by a third of this'))
