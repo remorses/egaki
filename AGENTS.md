@@ -413,6 +413,25 @@ angled-screen/src/index.ts   shader, ANGLED_SCREEN_DEFAULTS, createAngledScreenR
 The CLI page imports `/index.js` from the package `dist/`, so run
 `pnpm build` in `angled-screen/` before testing the CLI from source.
 
+## `@egaki/light-cookie` package
+
+`light-cookie/` lights an image like an object on a wall with three.js: a
+spot light projects a 2D canvas cookie (window shape × blurred shadow: leaves,
+or an image or video turned into a silhouette by a light pass) onto a tilted,
+skewed image plane, then bloom, tone mapping and a finish pass
+(fringe, grade, vignette, grain). Every animated value is a function of
+time / duration, so video frames are deterministic.
+
+```
+light-cookie/src/index.ts   createLightCookieScene, cookie drawing, FinishShader
+   └──▶ light-cookie/src/cli.ts   goke CLI: node:http serves dist/index.js, three/ and
+                                  inputs; the page renders stills (POST /output) or
+                                  frames (POST /frame, piped into ffmpeg)
+```
+
+The page maps `three` and `three/addons/` with an import map to the package's
+`node_modules/three`. Run `pnpm build` in `light-cookie/` before testing the CLI.
+
 ## Porting Framer shader components
 
 Framer shader modules (`defineShader()` from `framer`) can be ported to egaki

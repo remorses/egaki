@@ -1,0 +1,62 @@
+{
+  "name": "@egaki/light-cookie",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Light an image like a real object: window light cookies, moving leaf shadows, 3D tilt and skew, bloom, film grain. three.js renderer plus a CLI that renders images or videos through your Chrome.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": "dist/cli.js",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./src": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/remorses/egaki.git",
+    "directory": "light-cookie"
+  },
+  "homepage": "https://github.com/remorses/egaki#readme",
+  "bugs": {
+    "url": "https://github.com/remorses/egaki/issues"
+  },
+  "files": [
+    "src",
+    "dist",
+    "skills"
+  ],
+  "keywords": [
+    "light cookie",
+    "gobo",
+    "shadow",
+    "three",
+    "webgl",
+    "shader",
+    "film grain",
+    "cli",
+    "playwriter"
+  ],
+  "scripts": {
+    "build": "tsc && chmod +x dist/cli.js",
+    "prepublishOnly": "rimraf dist \"*.tsbuildinfo\" && pnpm build"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "goke": "^6.14.1",
+    "playwriter": "^0.10.0",
+    "string-dedent": "^3.0.2",
+    "three": "^0.187.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "@types/three": "^0.187.0",
+    "rimraf": "^6.0.1"
+  }
+}
