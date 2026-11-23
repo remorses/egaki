@@ -85,6 +85,30 @@ egaki voice clone noisy-audio.mp3 \
   --json
 ```
 
+## Voice change
+
+Re-speak an existing recording with another voice. Timing, emotion and
+delivery stay the same; only the **voice** changes:
+
+```bash
+egaki voice change take.wav --voice <voice-id> -o take-new-voice.mp3
+```
+
+The voice ID can come from the provider's voice library or from
+`egaki voice clone`.
+
+| Provider | Models | Notes |
+|---|---|---|
+| ElevenLabs (default) | `eleven_multilingual_sts_v2`, `eleven_english_sts_v2` | `--remove-background-noise` option |
+| Cartesia | none | `--provider cartesia` |
+
+```bash
+egaki voice change noisy-take.m4a \
+  --voice <voice-id> \
+  --remove-background-noise \
+  --json
+```
+
 ## Audio stem separation (demucs)
 
 Separate a song into individual stems using fal.ai's Demucs model:

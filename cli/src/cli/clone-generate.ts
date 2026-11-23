@@ -67,7 +67,7 @@ function validateOptions(opts: CloneVoiceOptions): Error | void {
 
 // ─── MIME type helper ───────────────────────────────────────────────────────
 
-function mimeTypeFromFilename(filename?: string): string {
+export function mimeTypeFromFilename(filename?: string): string {
   if (!filename) return 'audio/mpeg'
   const ext = filename.split('.').pop()?.toLowerCase()
   const map: Record<string, string> = {

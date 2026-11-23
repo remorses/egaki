@@ -371,6 +371,7 @@ egaki unsubscribe
 | `egaki bpm` | Detect BPM of audio (local, no API needed) |
 | `egaki loudness` | Measure perceived loudness in LUFS (local, no API needed) |
 | `egaki voice clone` | Clone a voice from audio (Cartesia, ElevenLabs) |
+| `egaki voice change` | Re-speak a recording with another voice, same timing (ElevenLabs, Cartesia) |
 | `egaki transcribe` | Speech-to-text (OpenAI, ElevenLabs, Deepgram, Groq, Cartesia) |
 | `egaki models` | List available models with pricing |
 
@@ -1411,6 +1412,27 @@ egaki voice clone stems/vocals.mp3 --name "my-voice" --language en --json
 # ElevenLabs (better for noisy audio)
 egaki voice clone stems/vocals.mp3 --provider elevenlabs --name "my-voice" --remove-background-noise --json
 ```
+
+### Voice change
+
+Re-speak an existing recording with another **voice**. Timing, emotion and
+delivery stay the same; only the voice changes. Output is MP3.
+
+```bash
+# ElevenLabs (default, eleven_multilingual_sts_v2)
+egaki voice change take.wav --voice <voice-id> -o take-new-voice.mp3
+
+# Clean a noisy take while changing the voice
+egaki voice change take.m4a --voice <voice-id> --remove-background-noise
+
+# English-only ElevenLabs model, or Cartesia
+egaki voice change take.wav --voice <voice-id> -m eleven_english_sts_v2
+egaki voice change take.wav --voice <voice-id> --provider cartesia
+```
+
+The voice ID can come from the provider's voice library or from
+`egaki voice clone`. Record a take yourself, then speak it with a cloned voice
+to keep your own pacing.
 
 ### TTS generation
 

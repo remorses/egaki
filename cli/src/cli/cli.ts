@@ -93,6 +93,10 @@ import {
   type CloneProvider,
 } from './clone-generate.js'
 import {
+  changeVoiceUncached as changeVoice,
+  VOICE_CHANGE_PROVIDER_IDS,
+} from './voice-change-generate.js'
+import {
   detectBpm,
 } from './bpm-detect.js'
 import {
@@ -1431,6 +1435,134 @@ cli
         voiceId: result.voiceId,
         name: result.name,
         provider: result.provider,
+      }, null, 2))
+    }
+  })
+
+// ─── voice change command ────────────────────────────────────────────────────
+
+cli
+  .command(
+    'voice change [audio]',
+    dedent`
+      Re-speak an existing recording with another voice (speech-to-speech).
+      Keeps the timing, emotion and delivery of the input; only the voice
+      changes. Supports ElevenLabs (default) and Cartesia.
+
+      The target voice can be any voice ID from the provider's library or a
+      voice made with 'egaki voice clone'. Output is MP3.
+
+      ElevenLabs models: eleven_multilingual_sts_v2 (default),
+      eleven_english_sts_v2. Cartesia has no model option.
+    `,
+  )
+  .option(
+    '--voice [voice]',
+    z
+      .string()
+      .describe('Target voice ID (required). From the provider voice library or egaki voice clone'),
+  )
+  .option(
+    '-p, --provider [provider]',
+    z
+      .enum(VOICE_CHANGE_PROVIDER_IDS)
+      .default('elevenlabs')
+      .describe(`Voice change provider: ${VOICE_CHANGE_PROVIDER_IDS.join(', ')}`),
+  )
+  .option(
+    '-m, --model [model]',
+    z
+      .string()
+      .describe('Provider model ID. ElevenLabs: eleven_multilingual_sts_v2 (default), eleven_english_sts_v2'),
+  )
+  .option(
+    '-o, --output [path]',
+    z
+      .string()
+      .describe('Output file path. Default: <input>-<provider>.mp3 (or egaki-output.mp3 with --stdin)'),
+  )
+  .option(
+    '--remove-background-noise',
+    'ElevenLabs: remove background noise from the input before conversion',
+  )
+  .option(
+    '--stdin',
+    'Read audio from stdin instead of a file path',
+  )
+  .option(
+    '--json',
+    'Output result metadata as JSON to stdout',
+  )
+  .example('# Re-speak a voiceover with an ElevenLabs voice')
+  .example('egaki voice change narration.wav --voice JBFqnCBsd6RMkjVDRZzb -o narration-george.mp3')
+  .example('# Clean a noisy recording while changing the voice')
+  .example('egaki voice change take.m4a --voice <voice-id> --remove-background-noise')
+  .example('# Use Cartesia')
+  .example('egaki voice change take.wav --voice f786b574-daa5-4673-aa0c-cbe3e8534c02 -p cartesia')
+  .example('# Speak your own recording with a cloned voice')
+  .example('egaki voice clone speaker.mp3 --name "Speaker" --provider elevenlabs')
+  .example('egaki voice change my-take.wav --voice <voice-id>')
+  .action(async (audioPath = '', options) => {
+    if (!options.stdin && !audioPath) {
+      console.error(pc.red('No audio provided. Pass an audio file path or use --stdin.'))
+      process.exit(1)
+    }
+
+    const voice = options.voice
+    if (!voice) {
+      console.error(pc.red('Target voice is required. Use --voice <voice-id>.'))
+      process.exit(1)
+    }
+
+    let audioData: Uint8Array
+    let filename: string | undefined
+
+    if (options.stdin) {
+      const chunks: Buffer[] = []
+      for await (const chunk of process.stdin) {
+        chunks.push(chunk)
+      }
+      audioData = new Uint8Array(Buffer.concat(chunks))
+    } else {
+      const resolved = path.resolve(audioPath)
+      if (!fs.existsSync(resolved)) {
+        console.error(pc.red(`File not found: ${resolved}`))
+        process.exit(1)
+      }
+      audioData = new Uint8Array(fs.readFileSync(resolved))
+      filename = path.basename(resolved)
+    }
+
+    const provider = options.provider ?? 'elevenlabs'
+
+    console.error(pc.dim(`Provider: ${provider}`))
+    console.error(pc.dim(`Voice: ${voice}`))
+    console.error(pc.dim(`Audio: ${options.stdin ? 'stdin' : audioPath} (${(audioData.length / 1024).toFixed(1)} KB)`))
+    console.error(pc.cyan('Changing voice...'))
+
+    const result = await runProviderCall('Voice change', () => changeVoice({
+      audio: audioData,
+      voice,
+      provider,
+      model: options.model,
+      filename,
+      removeBackgroundNoise: options.removeBackgroundNoise || false,
+    }))
+
+    const defaultOutput = options.stdin
+      ? 'egaki-output'
+      : path.join(path.dirname(audioPath), `${path.parse(audioPath).name}-${provider}`)
+    const finalPath = ensureExtension(options.output ?? defaultOutput, extensionFromMediaType(result.mediaType))
+    fs.writeFileSync(finalPath, result.audio)
+    console.error(pc.green(`Saved: ${finalPath}`))
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        file: finalPath,
+        provider: result.provider,
+        model: result.model,
+        voice,
+        bytes: result.audio.length,
       }, null, 2))
     }
   })
