@@ -1,6 +1,6 @@
 {
   "name": "@egaki/angled-screen",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "description": "Turn a flat screenshot into a tilted 3D screen with depth of field. WebGL2 renderer plus a CLI that renders through your Chrome.",
   "main": "./dist/index.js",

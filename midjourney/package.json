@@ -1,6 +1,6 @@
 {
   "name": "@egaki/midjourney",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "description": "Midjourney SDK powered by Playwriter browser automation",
   "main": "./dist/index.js",

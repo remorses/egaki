@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.13.0
+
+1. **New `egaki upscale` command** — the same image with more pixels and finer detail, from the terminal, so agents can upscale images too:
+
+   ```bash
+   # GPT Image: largest size for the aspect ratio, up to 3840px and 8.3 MP
+   egaki upscale photo.jpg
+   egaki upscale photo.jpg --scale 2 -o photo-2x.png
+
+   # Midjourney 2x through your logged-in midjourney.com tab (Playwriter extension)
+   egaki upscale painting.jpg -m midjourney
+   egaki upscale painting.jpg -m midjourney-creative --prompt "oil painting of cliffs in snow"
+   ```
+
+   GPT Image (default `gpt-image-2.6-sunburst`, any `gpt-image-2*` model) re-renders the input with a strict "keep everything identical" prompt, then matches its colors back to the input. With `OPENAI_API_KEY` it is one call. With ChatGPT login each call returns only about 1.6 MP, so the image is split into overlapping tiles that are upscaled in parallel and blended: a 992x570 painting becomes 3792x2176 in about 40 seconds. Midjourney works on any image, not only Midjourney generations.
+
+2. **New `egaki voice change` command** — re-speak a recording with another voice (speech-to-speech), keeping the timing, emotion and delivery. ElevenLabs is the default (`eleven_multilingual_sts_v2` or `eleven_english_sts_v2`, with `--remove-background-noise`); Cartesia works with `--provider cartesia`:
+
+   ```bash
+   egaki voice change take.wav --voice <voice-id> -o take-new-voice.mp3
+   ```
+
+3. **New `gpt-image-2.6-sunburst` and `gpt-image-2.6-flare` models** — they work with API keys and with ChatGPT login (`egaki login --provider chatgpt`). Quality levels and pricing match GPT Image 2.5 until OpenAI publishes the 2.6 values:
+
+   ```bash
+   egaki image "a fox reading a map" -m gpt-image-2.6-sunburst
+   ```
+
+4. **`AngledScreen` draws with the shared `@egaki/angled-screen` renderer**, so videos and the new `angled-screen` CLI produce the same image. Props, defaults and output are unchanged.
+
 ## 0.12.0
 
 1. **New GPT Image 2.5 models** — `gpt-image-2.5-flare` (fast, everyday generation and editing) and `gpt-image-2.5-sunburst` (most capable, best editing precision and reference fidelity). Both add the new `xhigh` and `max` quality levels:
