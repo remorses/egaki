@@ -589,7 +589,8 @@ export class Midjourney {
   async getJobStatus(jobIds: string[]): Promise<JobStatus[]> {
     return (await this.apiFetch('/api/job-status', {
       method: 'POST',
-      body: { jobIds },
+      // the site rejects job-status requests without _frontend_source (400 Invalid request)
+      body: { jobIds, _frontend_source: 'useJobSubmitter_fetchJobStatus' },
     })) as JobStatus[]
   }
 
