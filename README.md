@@ -91,7 +91,7 @@ egaki image "flat icon of a fox" --stdout | magick - -resize 512x512 fox-icon.pn
 ### Upscale an image
 
 ```bash
-# GPT Image re-renders the same image larger (up to 3840px with OPENAI_API_KEY)
+# GPT Image re-renders the same image at the largest size for its ratio (up to 3840px, 8.3 MP)
 egaki upscale photo.jpg
 
 # Midjourney 2x upscale through your logged-in midjourney.com tab (Playwriter)
@@ -99,7 +99,7 @@ egaki upscale painting.jpg -m midjourney
 egaki upscale painting.jpg -m midjourney-creative --prompt "oil painting of cliffs in snow"
 ```
 
-With ChatGPT login, the backend ignores the requested size and returns about 1.6 MP. Midjourney always returns 2x of its ~1 MP frame. Other upscale APIs are compared in [docs/upscale-apis.md](docs/upscale-apis.md).
+With ChatGPT login each call returns only about 1.6 MP, so egaki upscales overlapping tiles (9 calls for a 4K landscape) and blends them. Midjourney always returns 2x of its ~1 MP frame. Other upscale APIs are compared in [docs/upscale-apis.md](docs/upscale-apis.md).
 
 ---
 

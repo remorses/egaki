@@ -13,7 +13,7 @@ Integrate these first. All of them use keys egaki already has.
 
 1. **fal `fal-ai/seedvr/upscale/image`** (SeedVR2). Faithful, up to 10x or a target of 720p to 2160p, **$0.001 per output megapixel** (1024² to 4x = 16.8 MP costs about $0.017). The same API shape exists for video (`fal-ai/seedvr/upscale/video`). Uses `FAL_KEY`, which `separation-generate.ts` already reads. Best default.
 2. **fal `topaz/upscale/image/precision`** (Topaz Gigapixel models). Industry reference quality, faithful, up to 4x, **$0.08 per started 24 MP** of output. Add `topaz/upscale/image/generative` (Wonder 3.5 / 4) as the "rebuild detail" option for small or blurry inputs. Same `FAL_KEY`.
-3. **Keep GPT Image and Midjourney** (already in `cli/src/cli/upscale-generate.ts`). GPT Image re-renders the image. Via ChatGPT OAuth it costs nothing extra but the backend caps output at about 1.6 MP (tested); the 3840 px / 8.3 MP limit needs an `OPENAI_API_KEY`. Midjourney first fits the input to about 1 MP, then does 2x, so output is about 2048 px on the long edge.
+3. **Keep GPT Image and Midjourney** (already in `cli/src/cli/upscale-generate.ts`). GPT Image re-renders the image. Via ChatGPT OAuth it costs nothing extra but each call returns about 1.6 MP (tested), so `egaki upscale` tiles the image to reach the same 3840 px / 8.3 MP target an `OPENAI_API_KEY` gets in one call. Midjourney first fits the input to about 1 MP, then does 2x, so output is about 2048 px on the long edge.
 
 For video, start with **fal `fal-ai/seedvr/upscale/video`** (cheap, temporally consistent) and **fal `topaz/upscale/video/precision`** (Proteus, $0.20 per 10 s at 1080p). `fal-ai/bytedance-upscaler/upscale/video` is the cheapest per second ($0.0072/s to 1080p).
 
@@ -128,6 +128,20 @@ Gemini 3 image models can output 4K when given an input image and an "upscale th
 From the OpenAI image guide: custom sizes must be multiples of 16, edge at most 3840 px, long/short ratio at most 3:1, total pixels between 655,360 and 8,294,400. The guide says resolutions above 2560×1440 are experimental for GPT-Image-2.5. `gpt-image-2` always processes input images at high fidelity, which helps "same image, more pixels" prompts, but small text and faces can still change.
 
 The ChatGPT subscription backend (`chatgpt.com/backend-api/codex`) ignores `size` and `quality`, on both the Responses tool and the newer `images/edits` endpoint. A 992×570 painting came back at 1655×950 for every requested size. See [chatgpt-codex-image-backend.md](chatgpt-codex-image-backend.md).
+
+#### Getting bigger output with ChatGPT login (spikes, 2026-11-25)
+
+Input: a 992×570 painting. Every request below also set `size` and `quality: "high"`.
+
+| Approach | Output | Result |
+|---|---|---|
+| `size` 1024² to 3840×2160, any `gpt-image-*` model, Responses tool or `images/edits` | 1655×950 | size, quality, `resolution`, `image_size` and size in the prompt are all ignored. Quality comes back `low` or `medium` |
+| One call + fal SeedVR2 2.3x | 3792×2176 | sharp, but keeps GPT's stronger saturation. $0.008 extra, needs `FAL_KEY` |
+| fal SeedVR2 4x on the original | 3792×2192 | faithful, soft, no new detail |
+| 2×2 tiles, 20% overlap, color matched, feathered | 2977×1710 | no visible seams, colors match the input |
+| **3×3 tiles** (shipped) | 4301×2472, resized to 3792×2176 | no visible seams, slightly softer than 2×2, about 36 s |
+
+Tiles are matched to the input by per-channel mean and standard deviation, then blended with weights that ramp to 0 across each overlap. Tiles under 192 px on a side are not used, because the model sees too little context. The small signature text changes on every run.
 
 The `egaki upscale` prompt (`gptUpscalePrompt()` in `cli/src/cli/upscale-generate.ts`) follows the structure most upscale prompt guides share: the action with the target size, a keep list (composition, crop, colors, lighting, style, text, faces), the allowed improvements (edges, texture, remove blur, noise and JPEG artifacts), then a list of forbidden changes. Sources:
 

@@ -582,9 +582,11 @@ cli
       Upscale an image: same image, more pixels and finer detail.
 
       GPT Image models (default ${DEFAULT_UPSCALE_MODEL}) re-render the input
-      at a larger custom size with a strict "keep everything identical" prompt.
-      With OPENAI_API_KEY the output goes up to 3840px per edge and 8.3 MP.
-      With ChatGPT login the backend ignores the size and returns about 1.6 MP.
+      at a larger custom size with a strict "keep everything identical" prompt,
+      then match its colors to the input. Default size is the largest for the
+      aspect ratio: up to 3840px per edge and 8.3 MP. With OPENAI_API_KEY this
+      is one call. ChatGPT login returns only about 1.6 MP per call, so the
+      image is split into overlapping tiles (up to 16 calls) that are blended.
 
       Midjourney (midjourney, midjourney-creative) upscales 2x through your
       logged-in midjourney.com tab in Chrome via the Playwriter extension.
@@ -641,7 +643,7 @@ cli
       ? `egaki-upscaled${ext}`
       : path.join(path.dirname(imagePath), `${path.parse(imagePath).name}-upscaled${ext}`)
     const [savedFile] = saveGeneratedFiles([result.image], options.output ?? defaultOutput)
-    console.error(pc.dim(`Size: ${result.input.width}x${result.input.height} -> ${result.output.width}x${result.output.height}`))
+    console.error(pc.dim(`Size: ${result.input.width}x${result.input.height} -> ${result.output.width}x${result.output.height}${result.tiles && result.tiles > 1 ? ` (${result.tiles} tiles)` : ''}`))
     if (result.warning) console.error(pc.yellow(result.warning))
     printCost(result.cost)
 
@@ -652,6 +654,7 @@ cli
         input: result.input,
         output: result.output,
         cost: result.cost,
+        ...(result.tiles ? { tiles: result.tiles } : {}),
         ...(result.jobId ? { jobId: result.jobId } : {}),
         ...(result.warning ? { warning: result.warning } : {}),
       }, null, 2))

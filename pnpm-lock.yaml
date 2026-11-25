@@ -117,9 +117,6 @@ importers:
       goke:
         specifier: ^6.14.1
         version: 6.14.1
-      image-size:
-        specifier: ^2.1.0
-        version: 2.1.0
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1
@@ -153,6 +150,9 @@ importers:
       safe-mdx:
         specifier: ^1.12.0
         version: 1.14.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(supports-color@10.2.2)
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@25.3.0)
       shiki:
         specifier: ^4.2.0
         version: 4.2.0
@@ -5114,11 +5114,6 @@ packages:
     engines: {node: ^10 || ^12 || >= 14}
     peerDependencies:
       postcss: ^8.1.0
-
-  image-size@2.1.0:
-    resolution: {integrity: sha512-6Dbisa46RsgeAh3TMSFL2i8+uIFG+/LRmz6Q2oscSJJvXo1sOw3EgNO4M8jPl1P+gR1atJLDPrpclX4IHz63sA==}
-    engines: {node: '>=18'}
-    hasBin: true
 
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
@@ -10756,8 +10751,6 @@ snapshots:
     dependencies:
       postcss: 8.5.15
 
-  image-size@2.1.0: {}
-
   import-fresh@3.3.1:
     dependencies:
       parent-module: 1.0.1
@@ -12307,8 +12300,7 @@ snapshots:
 
   semver@7.8.4: {}
 
-  semver@7.8.6:
-    optional: true
+  semver@7.8.6: {}
 
   send@1.2.1(supports-color@10.2.2):
     dependencies:
@@ -12402,7 +12394,6 @@ snapshots:
       '@img/sharp-win32-ia32': 0.35.5
       '@img/sharp-win32-x64': 0.35.5
       '@types/node': 25.3.0
-    optional: true
 
   shebang-command@2.0.0:
     dependencies:
