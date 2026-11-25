@@ -35,8 +35,18 @@ Codex source instead of guessing the payload.
 
 ## Backend behavior verified in egaki
 
-- Works: text-to-image, image-to-image, multiple input images, `size`
+- Works: text-to-image, image-to-image, multiple input images
 - Does not work: `seed`, `n`, `aspect_ratio`, explicit `mask` tool args
+- `size` and `quality` are ignored (checked Nov 2026). Output is always about
+  1.6 MP: 1536x1024 for text-to-image, the input aspect ratio for edits (a
+  992x570 input gave 1655x950 for both 1024x1024 and 3792x2176 requests).
+  `egaki upscale` warns about this.
+- Newer Codex no longer uses the Responses tool for images. It posts JSON to
+  `https://chatgpt.com/backend-api/codex/images/generations` and
+  `.../images/edits` (`{ images: [{ image_url }], prompt, model, quality, size }`).
+  See `codex-rs/codex-api/src/endpoint/images.rs` and
+  `codex-rs/ext/image-generation/src/tool.rs`. That endpoint has the same
+  ~1.6 MP cap, but it skips the mainline model rewriting the prompt.
 - Final image comes from `response.output_item.done.item.result`
 - Progressive previews come from `response.image_generation_call.partial_image`
 
