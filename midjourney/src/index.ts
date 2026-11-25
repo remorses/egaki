@@ -23,6 +23,8 @@ export {
   filterByAspectRatio,
   getVideoUrl,
   getVideoThumbnailUrl,
+  midjourneyFrameSize,
+  frameAspectRatio,
   PAN_DIRECTION_MAP,
 } from './types.ts'
 export type {
@@ -39,5 +41,7 @@ export type {
   GenerateOptions,
   GenerateVideoOptions,
   UpscaleOptions,
+  UpscaleImageOptions,
+  UpscaleImageResult,
   PanOptions,
 } from './types.ts'

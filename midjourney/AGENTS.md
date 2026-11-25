@@ -131,6 +131,20 @@ generation types. All requests share the same base shape:
 - `type`: `"v7_2x_subtle"` or `"v7_2x_creative"`.
 - `id`: parent job ID, `index`: grid index (0-3).
 
+Upscale only accepts Midjourney jobs. To upscale any image, `upscaleImage()`
+first registers it as an editor upload job (below), then upscales grid index 0.
+
+**`t: "uploaded"`** (editor upload, used by `upscaleImage()`):
+- `imageUrl`: short URL of the image already drawn at `frame` size (the site
+  renders the editor canvas, then uploads it).
+- `frame`: `{ width, height }` from `midjourneyFrameSize()`. Any other size
+  fails with "Invalid frame dimensions given for aspect ratio. Should be WxH".
+- `image`: `{ x: 0, y: 0, width, height }` of the frame.
+- `prompt`: must not be empty, and must carry `--ar` matching the frame
+  (`frameAspectRatio()`) plus `--v 7`.
+- With nothing erased, the job (`job_type: v7_1024_outpaint`) completes in
+  seconds and all 4 grid images are the input unchanged.
+
 **`t: "pan"`** (outpaint):
 - `direction`: 0=up, 1=right, 2=down, 3=left.
 - `fraction`: how far to extend (0-1, default 0.5).

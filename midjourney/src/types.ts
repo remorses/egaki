@@ -278,7 +278,27 @@ export interface UpscaleOptions {
    * `"v7_2x_creative"` adds new detail and may reinterpret parts of the
    * image. Default: `"v7_2x_subtle"`.
    */
-  type?: 'v7_2x_subtle' | 'v7_2x_creative'
+  type?: 'v7_2x_subtle' | 'v7_2x_creative' | 'v8r2_2x_subtle' | 'v8r2_2x_creative'
+}
+
+export interface UpscaleImageOptions extends UpscaleOptions {
+  /**
+   * Prompt stored with the uploaded image job. Midjourney rejects empty
+   * prompts. Creative upscales follow it, subtle upscales mostly ignore it.
+   */
+  prompt?: string
+  /** Max milliseconds to wait for each job. Default: 600000 (10 min). */
+  timeout?: number
+}
+
+export interface UpscaleImageResult {
+  image: Buffer
+  width: number
+  height: number
+  /** Job that registered the uploaded image. */
+  uploadJobId: string
+  /** Upscale job. Its CDN URL is `getImageUrl(upscaleJobId, 0)`. */
+  upscaleJobId: string
 }
 
 export interface PanOptions {
@@ -425,6 +445,60 @@ export function getVideoUrl(jobId: string, gridIndex = 0): string {
  */
 export function getVideoThumbnailUrl(jobId: string, gridIndex = 0, width = 640): string {
   return `https://cdn.midjourney.com/video/${jobId}/${gridIndex}_${width}_N.webp?frame=last`
+}
+
+// ---------------------------------------------------------------------------
+// Editor frame size
+// ---------------------------------------------------------------------------
+
+function gcd(a: number, b: number): number {
+  while (b !== 0) [a, b] = [b, a % b]
+  return a
+}
+
+/**
+ * Frame size Midjourney v7 requires for an uploaded image with this aspect
+ * ratio. Port of the website's editor function (T8 + U5 + R6 in the bundle):
+ * scale the short side to 1024, then pick the 16px grid size under 1.22 MP
+ * closest in area and ratio. `/api/submit-jobs` rejects any other frame with
+ * "Invalid frame dimensions given for aspect ratio. Should be WxH".
+ */
+export function midjourneyFrameSize(width: number, height: number): { width: number; height: number } {
+  const divisor = gcd(width, height)
+  const w = width / divisor
+  const h = height / divisor
+  const ratio = Math.max(w, h) / Math.min(w, h)
+  const long = (Math.floor(1024 * ratio) + 8) & ~15
+  const target = w > h ? { width: long, height: 1024 } : { width: 1024, height: long }
+
+  const shape = target.height > target.width ? (a: number, b: number) => a / b : (a: number, b: number) => b / a
+  const targetArea = target.width * target.height
+  const targetShape = shape(target.width, target.height)
+  let best = { width: 1024, height: 1024 }
+  let bestScore = Infinity
+  for (let m = 1; m <= 256; m++) {
+    for (let f = 1; f <= 256; f++) {
+      const cw = m * 16
+      const ch = f * 16
+      const area = cw * ch
+      if (area > 1.22e6) continue
+      const score = Math.abs(area - targetArea) / 1e6 + Math.abs(shape(cw, ch) - targetShape) * 16
+      if (score < bestScore) {
+        bestScore = score
+        best = { width: cw, height: ch }
+      }
+    }
+  }
+  // the site maps these three near-4:3 results to one size
+  const key = `${best.width}x${best.height}`
+  if (key === '1328x912' || key === '1312x896' || key === '1328x896') return { width: 1312, height: 912 }
+  return best
+}
+
+/** Reduce a frame size to the `--ar W:H` value Midjourney expects for it. */
+export function frameAspectRatio(frame: { width: number; height: number }): string {
+  const divisor = gcd(frame.width, frame.height)
+  return `${frame.width / divisor}:${frame.height / divisor}`
 }
 
 /** Maps direction names to the numeric codes used by /api/submit-jobs. */

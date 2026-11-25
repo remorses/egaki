@@ -22,9 +22,11 @@ import type {
   GenerateOptions,
   GenerateVideoOptions,
   UpscaleOptions,
+  UpscaleImageOptions,
+  UpscaleImageResult,
   PanOptions,
 } from './types.ts'
-import { filterByAspectRatio, PAN_DIRECTION_MAP } from './types.ts'
+import { filterByAspectRatio, frameAspectRatio, getImageUrl, midjourneyFrameSize, PAN_DIRECTION_MAP } from './types.ts'
 
 export class MidjourneySoftbanError extends Error {
   constructor(public jobId: string) {
@@ -459,6 +461,101 @@ export class Midjourney {
   }
 
   /**
+   * Upscale any image 2x, not only Midjourney generations.
+   *
+   * Midjourney can only upscale its own jobs, so this first registers the
+   * image as an editor "uploaded" job (no erased area, so all 4 grid images
+   * are the input unchanged), then upscales grid image 0 and downloads it.
+   * The image is cover-fit to the v7 frame size for its aspect ratio, which
+   * can crop a few pixels from one side.
+   *
+   * @example
+   * ```ts
+   * const result = await mj.upscaleImage(fs.readFileSync('photo.jpg'))
+   * fs.writeFileSync('photo-2x.jpg', result.image)
+   * ```
+   */
+  async upscaleImage(image: Buffer, options: UpscaleImageOptions = {}): Promise<UpscaleImageResult> {
+    const page = await this.ensurePage()
+    const userId = await this.getUserId()
+    const base64 = image.toString('base64')
+    const timeout = options.timeout ?? 600_000
+
+    const size: { width: number; height: number } = await page.evaluate(async (base64) => {
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+      const bitmap = await createImageBitmap(new Blob([bytes]))
+      return { width: bitmap.width, height: bitmap.height }
+    }, base64)
+    const frame = midjourneyFrameSize(size.width, size.height)
+    const upload = await this.uploadInPage({ base64, filename: 'upscale-input.png', contentType: 'image/png', frame })
+
+    const prompt = options.prompt?.trim() || 'highly detailed, sharp focus, high resolution'
+    const uploadResponse = (await this.apiFetch('/api/submit-jobs', {
+      method: 'POST',
+      body: {
+        f: { mode: options.mode ?? 'fast', private: options.private ?? false },
+        channelId: `singleplayer_${userId}`,
+        metadata: {
+          isMobile: null,
+          imagePrompts: 0,
+          imageReferences: 0,
+          characterReferences: 0,
+          depthReferences: 0,
+          lightboxOpen: null,
+        },
+        t: 'uploaded',
+        prompt: `${prompt} --ar ${frameAspectRatio(frame)} --v 7`,
+        frame,
+        image: { x: 0, y: 0, ...frame },
+        imageUrl: upload.shortUrl,
+      },
+    })) as SubmitJobsResponse
+    const uploadJob = firstSubmittedJob(uploadResponse, 'image upload')
+    const uploadStatus = await this.waitForJob(uploadJob.job_id, { timeout })
+    if (uploadStatus.current_status !== 'completed') {
+      throw new Error(`Midjourney image upload job ${uploadJob.job_id} ended as ${uploadStatus.current_status}`)
+    }
+
+    const upscaleJob = await this.upscale(uploadJob.job_id, 0, {
+      type: options.type ?? 'v7_2x_subtle',
+      mode: options.mode,
+      private: options.private,
+    })
+    const upscaleStatus = await this.waitForJob(upscaleJob.job_id, { timeout })
+    if (upscaleStatus.current_status !== 'completed') {
+      throw new Error(`Midjourney upscale job ${upscaleJob.job_id} ended as ${upscaleStatus.current_status}`)
+    }
+
+    return {
+      image: await this.downloadImage(getImageUrl(upscaleJob.job_id, 0)),
+      width: upscaleStatus.width,
+      height: upscaleStatus.height,
+      uploadJobId: uploadJob.job_id,
+      upscaleJobId: upscaleJob.job_id,
+    }
+  }
+
+  /**
+   * Download a cdn.midjourney.com file through the page. The CDN is behind
+   * Cloudflare bot protection, so a fetch from Node gets 403.
+   */
+  async downloadImage(url: string): Promise<Buffer> {
+    const page = await this.ensurePage()
+    const result: { ok: true; base64: string } | { ok: false; status: number } = await page.evaluate(async (url) => {
+      const res = await fetch(url)
+      if (!res.ok) return { ok: false as const, status: res.status }
+      const bytes = new Uint8Array(await res.arrayBuffer())
+      let binary = ''
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      }
+      return { ok: true as const, base64: btoa(binary) }
+    }, url)
+    if (!result.ok) throw new Error(`Midjourney download failed ${result.status}: ${url}`)
+    return Buffer.from(result.base64, 'base64')
+  }
+
+  /**
    * Pan (outpaint) a specific grid image in a direction.
    *
    * @param jobId - The parent job's ID.
@@ -523,23 +620,43 @@ export class Midjourney {
    *   `.png` = `image/png`, `.webp` = `image/webp`, anything else = `image/jpeg`.
    */
   async uploadFile(fileBuffer: Buffer, filename: string): Promise<UploadFileResponse> {
-    const page = await this.ensurePage()
-
-    // Convert Buffer to base64 so we can pass it into page.evaluate
-    const base64 = fileBuffer.toString('base64')
     const contentType = filename.endsWith('.png')
       ? 'image/png'
       : filename.endsWith('.webp')
         ? 'image/webp'
         : 'image/jpeg'
+    return this.uploadInPage({ base64: fileBuffer.toString('base64'), filename, contentType })
+  }
+
+  /**
+   * Upload image bytes from inside the page. With `frame`, the image is first
+   * drawn cover-fit on a canvas of that size, like the website's editor does.
+   */
+  private async uploadInPage(input: {
+    base64: string
+    filename: string
+    contentType: string
+    frame?: { width: number; height: number }
+  }): Promise<UploadFileResponse> {
+    const page = await this.ensurePage()
 
     const result: ApiResult = await page.evaluate(
-      async ({ base64, filename, contentType }) => {
-        // Convert base64 back to binary
+      async ({ base64, filename, contentType, frame }) => {
         const binary = atob(base64)
         const bytes = new Uint8Array(binary.length)
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        const blob = new Blob([bytes], { type: contentType })
+        let blob = new Blob([bytes], { type: contentType })
+
+        if (frame) {
+          const bitmap = await createImageBitmap(blob)
+          const canvas = new OffscreenCanvas(frame.width, frame.height)
+          const ctx = canvas.getContext('2d')!
+          const scale = Math.max(frame.width / bitmap.width, frame.height / bitmap.height)
+          const w = bitmap.width * scale
+          const h = bitmap.height * scale
+          ctx.drawImage(bitmap, (frame.width - w) / 2, (frame.height - h) / 2, w, h)
+          blob = await canvas.convertToBlob({ type: 'image/png' })
+        }
 
         const formData = new FormData()
         formData.append('file', blob, filename)
@@ -569,7 +686,7 @@ export class Midjourney {
 
         return { ok: true as const, data: await res.json() }
       },
-      { base64, filename, contentType },
+      input,
     )
 
     if (!result.ok) {
