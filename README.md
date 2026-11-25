@@ -88,6 +88,19 @@ egaki video "storm over mountains" -m vertex/veo-3.1-fast-generate-001 --duratio
 egaki image "flat icon of a fox" --stdout | magick - -resize 512x512 fox-icon.png
 ```
 
+### Upscale an image
+
+```bash
+# GPT Image re-renders the same image larger (up to 3840px with OPENAI_API_KEY)
+egaki upscale photo.jpg
+
+# Midjourney 2x upscale through your logged-in midjourney.com tab (Playwriter)
+egaki upscale painting.jpg -m midjourney
+egaki upscale painting.jpg -m midjourney-creative --prompt "oil painting of cliffs in snow"
+```
+
+With ChatGPT login, the backend ignores the requested size and returns about 1.6 MP. Midjourney always returns 2x of its ~1 MP frame. Other upscale APIs are compared in [docs/upscale-apis.md](docs/upscale-apis.md).
+
 ---
 
 ### Generate a video from text

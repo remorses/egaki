@@ -102,6 +102,11 @@ import {
 import {
   detectLoudness,
 } from './loudness-detect.js'
+import {
+  upscaleImageUncached as upscaleImage,
+  DEFAULT_UPSCALE_MODEL,
+  UPSCALE_MODELS,
+} from './upscale-generate.js'
 
 const cli = goke('egaki')
 
@@ -564,6 +569,91 @@ cli
         warnings: result.warnings,
         ...(result.text ? { text: result.text } : {}),
         ...(result.revisedPrompt !== undefined ? { revisedPrompt: result.revisedPrompt } : {}),
+      }, null, 2))
+    }
+  })
+
+// ─── upscale command ─────────────────────────────────────────────────────────
+
+cli
+  .command(
+    'upscale <image>',
+    dedent`
+      Upscale an image: same image, more pixels and finer detail.
+
+      GPT Image models (default ${DEFAULT_UPSCALE_MODEL}) re-render the input
+      at a larger custom size with a strict "keep everything identical" prompt.
+      With OPENAI_API_KEY the output goes up to 3840px per edge and 8.3 MP.
+      With ChatGPT login the backend ignores the size and returns about 1.6 MP.
+
+      Midjourney (midjourney, midjourney-creative) upscales 2x through your
+      logged-in midjourney.com tab in Chrome via the Playwriter extension.
+      The input is cover-fit to Midjourney's frame for its aspect ratio, which
+      can crop a few pixels from one side.
+
+      Generative upscalers can change small details. Compare with the original.
+    `,
+  )
+  .option(
+    '-m, --model [model]',
+    z
+      .string()
+      .default(DEFAULT_UPSCALE_MODEL)
+      .describe(`Upscale model: ${UPSCALE_MODELS.join(', ')}`),
+  )
+  .option(
+    '-o, --output [path]',
+    z.string().describe('Output file path. Default: <input>-upscaled.<ext> next to the input'),
+  )
+  .option(
+    '--scale [factor]',
+    z.number().describe('Scale factor, e.g. 2. GPT Image default: the largest size the model allows. Midjourney: always 2'),
+  )
+  .option(
+    '--prompt [text]',
+    z.string().describe('Extra instructions for GPT Image, or the job prompt for Midjourney (describe the image for midjourney-creative)'),
+  )
+  .option('--json', 'Output result metadata as JSON to stdout')
+  .example('# Upscale with GPT Image to the largest supported size')
+  .example('egaki upscale photo.jpg')
+  .example('# 2x with GPT Image')
+  .example('egaki upscale photo.jpg --scale 2 -o photo-2x.png')
+  .example('# Midjourney subtle 2x upscale (needs Chrome + Playwriter, logged into midjourney.com)')
+  .example('egaki upscale painting.jpg -m midjourney')
+  .example('# Midjourney creative upscale guided by a prompt')
+  .example('egaki upscale painting.jpg -m midjourney-creative --prompt "oil painting of cliffs in snow"')
+  .action(async (imagePath, options) => {
+    const model = options.model ?? DEFAULT_UPSCALE_MODEL
+    const image = await readInputSource(imagePath)
+
+    console.error(pc.dim(`Model: ${model}`))
+    console.error(pc.cyan('Upscaling...'))
+
+    const result = await runProviderCall('Upscale', () => upscaleImage({
+      image,
+      model,
+      scale: options.scale,
+      prompt: options.prompt,
+    }))
+
+    const ext = extensionFromMediaType(result.image.mediaType)
+    const defaultOutput = isUrl(imagePath)
+      ? `egaki-upscaled${ext}`
+      : path.join(path.dirname(imagePath), `${path.parse(imagePath).name}-upscaled${ext}`)
+    const [savedFile] = saveGeneratedFiles([result.image], options.output ?? defaultOutput)
+    console.error(pc.dim(`Size: ${result.input.width}x${result.input.height} -> ${result.output.width}x${result.output.height}`))
+    if (result.warning) console.error(pc.yellow(result.warning))
+    printCost(result.cost)
+
+    if (options.json) {
+      console.log(JSON.stringify({
+        model: result.model,
+        file: savedFile,
+        input: result.input,
+        output: result.output,
+        cost: result.cost,
+        ...(result.jobId ? { jobId: result.jobId } : {}),
+        ...(result.warning ? { warning: result.warning } : {}),
       }, null, 2))
     }
   })

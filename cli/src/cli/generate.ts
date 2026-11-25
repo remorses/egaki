@@ -114,6 +114,8 @@ export interface GenerateImageOptions {
   negativePrompt?: string
   /** Only for text-model image generation (Gemini). */
   imageSize?: '1K' | '2K' | '4K'
+  /** Exact output size for models with a `size` parameter (OpenAI). Overrides the aspect ratio fallback. */
+  size?: `${number}x${number}`
 }
 
 export interface GenerateImageResult {
@@ -496,6 +498,8 @@ export async function generateImageUncached(opts: GenerateImageOptions): Promise
       seed: opts.seed,
       maskImage: opts.maskImage,
       inputImages,
+      quality: opts.quality,
+      size: opts.size,
     })
   }
 
@@ -513,6 +517,7 @@ export async function generateImageUncached(opts: GenerateImageOptions): Promise
       resolution: opts.resolution,
       outputFormat: opts.outputFormat,
       negativePrompt: opts.negativePrompt,
+      size: opts.size,
     })
   }
 
@@ -627,6 +632,7 @@ async function generateWithImageModel(opts: {
   resolution?: string
   outputFormat?: string
   negativePrompt?: string
+  size?: `${number}x${number}`
 }): Promise<Error | GenerateImageResult> {
   const config = getModelConfig(opts.model)
   if (config instanceof Error) return config
@@ -635,9 +641,11 @@ async function generateWithImageModel(opts: {
   // parameter, so the request is expressed through `size` + the prompt text.
   const features = config.strategy === 'video' ? undefined : config.features
   const supportsNativeAspectRatio = (features?.aspectRatios?.length ?? 0) > 0
-  const fallback = supportsNativeAspectRatio
-    ? { prompt: opts.prompt, size: undefined }
-    : aspectRatioFallback(opts.prompt, opts.aspectRatio, features?.sizes ?? [])
+  const fallback = opts.size
+    ? { prompt: opts.prompt, size: opts.size }
+    : supportsNativeAspectRatio
+      ? { prompt: opts.prompt, size: undefined }
+      : aspectRatioFallback(opts.prompt, opts.aspectRatio, features?.sizes ?? [])
 
   const imagePrompt = opts.inputImages.length > 0
     ? { text: fallback.prompt, images: opts.inputImages, ...(opts.maskImage ? { mask: opts.maskImage } : {}) }
@@ -771,6 +779,8 @@ async function generateWithResponsesApi(opts: {
   seed?: number
   maskImage?: Uint8Array
   inputImages: Uint8Array[]
+  quality?: string
+  size?: `${number}x${number}`
 }): Promise<Error | GenerateImageResult> {
   if (opts.count !== 1) {
     return new ValidationError('ChatGPT image generation currently supports exactly one output image.')
@@ -784,7 +794,9 @@ async function generateWithResponsesApi(opts: {
     return new ValidationError('ChatGPT image generation does not support mask yet.')
   }
 
-  const { prompt, size } = aspectRatioFallback(opts.prompt, opts.aspectRatio, OPENAI_SIZES)
+  const { prompt, size } = opts.size
+    ? { prompt: opts.prompt, size: opts.size }
+    : aspectRatioFallback(opts.prompt, opts.aspectRatio, OPENAI_SIZES)
 
   const storedAuth = getChatGptAuth()
   if (!storedAuth?.accountId) {
@@ -819,7 +831,7 @@ async function generateWithResponsesApi(opts: {
       {
         type: 'image_generation',
         model: opts.model,
-        quality: 'auto',
+        quality: opts.quality ?? 'auto',
         output_format: 'png',
         output_compression: 100,
         moderation: 'auto',
